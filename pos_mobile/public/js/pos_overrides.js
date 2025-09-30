@@ -226,6 +226,8 @@
 								this.render_payment_mode_dom();
 							} catch (e) {}
 						}, 1000);
+						// ensure payment panel is in view
+						try { this.$component && this.$component.get(0).scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
 					} catch (e) {}
 				};
 
@@ -238,6 +240,55 @@
 						this._pos_mobile_refresh = null;
 					}
 				};
+			}
+		} catch (e) {}
+
+		// Provide update_cart_badges on ItemSelector if missing, and keep badges in sync
+		try {
+			const IS = erpnext?.PointOfSale?.ItemSelector;
+			if (IS && !IS.prototype.update_cart_badges) {
+				IS.prototype.update_cart_badges = function () {
+					try {
+						const frm = this.events.get_frm();
+						const doc = frm?.doc || {};
+						const items = doc.items || [];
+						const tileList = document.querySelectorAll('.items-selector .item-wrapper');
+						tileList.forEach((tile) => {
+							const code = unescape(tile.getAttribute('data-item-code') || '');
+							const uom = unescape(tile.getAttribute('data-uom') || '');
+							const qty = items.filter((i) => i.item_code === code && (!uom || i.uom === uom)).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+							let badge = tile.querySelector('.cart-badge');
+							if (!badge) {
+								badge = document.createElement('div');
+								badge.className = 'cart-badge';
+								badge.style.cssText = 'position:absolute;top:6px;right:6px;min-width:20px;height:20px;border-radius:10px;background:var(--btn-primary);color:var(--neutral);font-size:12px;line-height:20px;text-align:center;padding:0 6px;display:none;';
+								tile.style.position = 'relative';
+								tile.appendChild(badge);
+							}
+							if (qty > 0) {
+								badge.textContent = qty;
+								badge.style.display = 'inline-block';
+							} else {
+								badge.style.display = 'none';
+							}
+						});
+
+						// Update mobile Item Cart button count
+						const btn = document.querySelector('.items-selector .selected-items-btn');
+						if (btn) {
+							const total_qty = items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+							const baseLabel = frappe._('Item Cart');
+							btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
+						}
+					} catch (e) {}
+				};
+				// Keep badges updated periodically as a safety net
+				setInterval(() => {
+					try {
+						const selector = cur_pos?.item_selector;
+						selector && selector.update_cart_badges && selector.update_cart_badges();
+					} catch (e) {}
+				}, 1500);
 			}
 		} catch (e) {}
 	});
