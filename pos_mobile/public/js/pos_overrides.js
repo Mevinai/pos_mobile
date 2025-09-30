@@ -117,39 +117,52 @@
 		try {
 			const filter = document.querySelector('.items-selector .filter-section');
 			const cartContainer = document.querySelector('.customer-cart-container');
-			if (filter && cartContainer && !filter.querySelector('.selected-items-btn')) {
-				const wrapper = document.createElement('div');
+			if (!filter || !cartContainer) return;
+
+			// Use existing button if present; otherwise create
+			let btn = filter.querySelector('.selected-items-btn');
+			let wrapper = btn ? btn.closest('.view-selected-wrapper') : null;
+			if (!btn) {
+				wrapper = document.createElement('div');
 				wrapper.className = 'view-selected-wrapper';
-				wrapper.style.cssText = 'flex: 1 1 100%; margin-left:0; display:flex; align-items:center; margin-top:8px;';
-				const btn = document.createElement('button');
-				btn.className = 'view-selected-btn selected-items-btn';
-				btn.setAttribute('aria-label', frappe._('Item Cart'));
-				// Set initial label with total selected count (if available)
-				try {
-					const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
-					const doc = frm ? frm.doc : {};
-					const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
-					const baseLabel = frappe._('Item Cart');
-					btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
-				} catch (e) {
-					btn.textContent = frappe._('Item Cart');
-				}
-				btn.style.cssText = 'display:none;width:100%;height:36px;padding:0 12px;font-size:16px;border:none;border-radius:var(--border-radius-md);background:#000000ff;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);';
-
-				// Toggle visibility based on viewport to mirror core behavior
-				const updateBtnVisibility = () => {
-					try {
-						const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
-						btn.style.display = isMobile ? 'inline-flex' : 'none';
-					} catch (e) {}
-				};
-				updateBtnVisibility();
-				window.addEventListener('resize', updateBtnVisibility);
-
-                btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
+				const newBtn = document.createElement('button');
+				newBtn.className = 'view-selected-btn selected-items-btn';
+				newBtn.setAttribute('aria-label', frappe._('Item Cart'));
+				btn = newBtn;
 				wrapper.appendChild(btn);
 				filter.appendChild(wrapper);
 			}
+
+			// Force wrapper to full width on mobile flex rows; prevent shrinking
+			if (wrapper) {
+				wrapper.style.cssText = 'flex: 0 0 100%; width:100%; margin-left:0; display:flex; align-items:center; margin-top:8px;';
+			}
+
+			// Ensure button full width and mobile-friendly
+			btn.style.cssText = 'display:none; width:100%; height:36px; padding:0 12px; font-size:16px; border:none; border-radius:var(--border-radius-md); background:#000000ff; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;';
+
+			// Initialize label with total selected count (if available)
+			try {
+				const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
+				const doc = frm ? frm.doc : {};
+				const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+				const baseLabel = frappe._('Item Cart');
+				btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
+			} catch (e) {
+				btn.textContent = frappe._('Item Cart');
+			}
+
+			// Toggle visibility based on viewport to mirror core behavior
+			const updateBtnVisibility = () => {
+				try {
+					const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+					btn.style.display = isMobile ? 'block' : 'none';
+				} catch (e) {}
+			};
+			updateBtnVisibility();
+			window.addEventListener('resize', updateBtnVisibility);
+
+			btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
 		} catch (e) {}
 	}
 
