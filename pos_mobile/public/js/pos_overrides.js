@@ -72,8 +72,8 @@
 			.customer-cart-container .cart-totals-section { position: sticky; bottom: 0; background: var(--bg-color); z-index: 1; }
 
 			/* Item Selector responsive grid and filter bar wrapping */
-			.items-selector .filter-section { display: flex; flex-wrap: wrap; gap: 8px; }
-			.items-selector .view-selected-wrapper { flex: 0 0 100%; width: 100%; display: flex; align-items: center; margin-top: 8px; }
+			.items-selector .filter-section { display: flex !important; flex-wrap: wrap !important; gap: 8px; }
+			.items-selector .view-selected-wrapper { flex: 0 0 100% !important; width: 100% !important; min-width: 100% !important; display: flex; align-items: center; margin-top: 8px; order: 99; }
 			.items-selector .items-container { display: grid; grid-gap: var(--padding-sm); }
 			@media (max-width: 420px) { .items-selector .items-container { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 			@media (min-width: 421px) and (max-width: 640px) { .items-selector .items-container { grid-template-columns: repeat(3, minmax(0,1fr)); } }
@@ -82,7 +82,8 @@
 
 			/* Selected Items button pulse (mobile) */
 			@keyframes posBtnPulse { 0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, .35);} 70% { box-shadow: 0 0 0 8px rgba(0, 122, 255, 0);} 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0);} }
-			.items-selector .selected-items-btn { width: 100%; height: 44px; padding: 0 16px; font-size: 16px; font-weight: 600; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.12); animation: posBtnPulse 2s ease-out infinite; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+			.items-selector .selected-items-btn { width: 100% !important; height: 36px; padding: 0 12px; font-size: 16px; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); animation: posBtnPulse 2s ease-out infinite; }
+			@media (max-width: 768px) { .items-selector .selected-items-btn { display: flex !important; justify-content: center; align-items: center; } }
 			@media (min-width: 769px) { .items-selector .selected-items-btn { display: none; } }
 		`;
 		document.body.appendChild(style);
