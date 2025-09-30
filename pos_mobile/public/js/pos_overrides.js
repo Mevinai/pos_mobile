@@ -55,6 +55,7 @@
 
 			/* Item Selector responsive grid and filter bar wrapping */
 			.items-selector .filter-section { display: flex; flex-wrap: wrap; gap: 8px; }
+			.items-selector .view-selected-wrapper { flex: 1 1 100%; display: flex; align-items: center; margin-top: 8px; }
 			.items-selector .items-container { display: grid; grid-gap: var(--padding-sm); }
 			@media (max-width: 420px) { .items-selector .items-container { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 			@media (min-width: 421px) and (max-width: 640px) { .items-selector .items-container { grid-template-columns: repeat(3, minmax(0,1fr)); } }
@@ -63,7 +64,8 @@
 
 			/* Selected Items button pulse (mobile) */
 			@keyframes posBtnPulse { 0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, .35);} 70% { box-shadow: 0 0 0 8px rgba(0, 122, 255, 0);} 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0);} }
-			.items-selector .selected-items-btn { animation: posBtnPulse 2s ease-out infinite; }
+			.items-selector .selected-items-btn { width: 100%; height: 36px; padding: 0 12px; font-size: 16px; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); animation: posBtnPulse 2s ease-out infinite; }
+			@media (min-width: 769px) { .items-selector .selected-items-btn { display: none; } }
 		`;
 		document.body.appendChild(style);
 	}
@@ -104,7 +106,16 @@
 				const btn = document.createElement('button');
 				btn.className = 'view-selected-btn selected-items-btn';
 				btn.setAttribute('aria-label', frappe._('Item Cart'));
-				btn.textContent = frappe._('Item Cart');
+				// Set initial label with total selected count (if available)
+				try {
+					const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
+					const doc = frm ? frm.doc : {};
+					const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+					const baseLabel = frappe._('Item Cart');
+					btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
+				} catch (e) {
+					btn.textContent = frappe._('Item Cart');
+				}
 				btn.style.cssText = 'width:100%;height:36px;padding:0 12px;font-size:16px;border:none;border-radius:var(--border-radius-md);background:#000000ff;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);';
 				btn.addEventListener('click', () => cartContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 				wrapper.appendChild(btn);
