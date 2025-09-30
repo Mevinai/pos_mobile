@@ -120,7 +120,7 @@
 			if (filter && cartContainer && !filter.querySelector('.selected-items-btn')) {
 				const wrapper = document.createElement('div');
 				wrapper.className = 'view-selected-wrapper';
-				wrapper.style.cssText = 'flex:1 1 100%;display:flex;align-items:center;margin-top:8px;';
+				wrapper.style.cssText = 'flex: 1 1 100%; margin-left:0; display:flex; align-items:center; margin-top:8px;';
 				const btn = document.createElement('button');
 				btn.className = 'view-selected-btn selected-items-btn';
 				btn.setAttribute('aria-label', frappe._('Item Cart'));
@@ -134,7 +134,18 @@
 				} catch (e) {
 					btn.textContent = frappe._('Item Cart');
 				}
-				btn.style.cssText = 'width:100%;height:36px;padding:0 12px;font-size:16px;border:none;border-radius:var(--border-radius-md);background:#000000ff;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);';
+				btn.style.cssText = 'display:none;width:100%;height:36px;padding:0 12px;font-size:16px;border:none;border-radius:var(--border-radius-md);background:#000000ff;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);';
+
+				// Toggle visibility based on viewport to mirror core behavior
+				const updateBtnVisibility = () => {
+					try {
+						const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+						btn.style.display = isMobile ? 'inline-flex' : 'none';
+					} catch (e) {}
+				};
+				updateBtnVisibility();
+				window.addEventListener('resize', updateBtnVisibility);
+
                 btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
 				wrapper.appendChild(btn);
 				filter.appendChild(wrapper);
