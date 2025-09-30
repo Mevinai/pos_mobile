@@ -3,7 +3,25 @@
 // Keep everything idempotent and scoped.
 
 (function () {
-	if (!window.frappe) return;
+    if (!window.frappe) return;
+
+    // Stronger smooth scroll helper to ensure element is in view after layout settles
+    function strongScrollIntoView(element) {
+        try {
+            const el = element && element.jquery ? element.get(0) : element;
+            if (!el) return;
+            const doScroll = () => el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (window.requestAnimationFrame) {
+                requestAnimationFrame(() => {
+                    doScroll();
+                    setTimeout(doScroll, 120);
+                });
+            } else {
+                doScroll();
+                setTimeout(doScroll, 120);
+            }
+        } catch (e) {}
+    }
 
 	function onPOSReady(cb) {
 		// Wait until the POS page main container is present
@@ -117,7 +135,7 @@
 					btn.textContent = frappe._('Item Cart');
 				}
 				btn.style.cssText = 'width:100%;height:36px;padding:0 12px;font-size:16px;border:none;border-radius:var(--border-radius-md);background:#000000ff;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);';
-				btn.addEventListener('click', () => cartContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
 				wrapper.appendChild(btn);
 				filter.appendChild(wrapper);
 			}
@@ -151,11 +169,9 @@
 					const orig_toggle_components = C.prototype.toggle_components;
 					C.prototype.toggle_components = function (show) {
 						orig_toggle_components && orig_toggle_components.call(this, show);
-						if (show) {
-							try {
-								this.$components_wrapper && this.$components_wrapper.get(0).scrollIntoView({ behavior: 'smooth', block: 'start' });
-							} catch (e) {}
-						}
+                        if (show) {
+                            try { this.$components_wrapper && strongScrollIntoView(this.$components_wrapper.get(0)); } catch (e) {}
+                        }
 					};
 				}
 			}
@@ -169,9 +185,9 @@
 				const orig_toggle = ID.prototype.toggle_component;
 				ID.prototype.toggle_component = function (show) {
 					orig_toggle && orig_toggle.call(this, show);
-					if (show) {
-						try { this.$component && this.$component.get(0).scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
-					}
+                    if (show) {
+                        try { this.$component && strongScrollIntoView(this.$component.get(0)); } catch (e) {}
+                    }
 				};
 			}
 		} catch (e) {}
@@ -183,8 +199,8 @@
 				const mo = new MutationObserver(() => {
 					const hasDetails = customerSection.querySelector('.customer-details');
 					if (hasDetails) {
-						const itemsSelector = document.querySelector('.items-selector');
-						itemsSelector && itemsSelector.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        const itemsSelector = document.querySelector('.items-selector');
+                        itemsSelector && strongScrollIntoView(itemsSelector);
 					}
 				});
 				mo.observe(customerSection, { childList: true, subtree: true });
@@ -237,8 +253,8 @@
 								this.render_payment_mode_dom();
 							} catch (e) {}
 						}, 1000);
-						// ensure payment panel is in view
-						try { this.$component && this.$component.get(0).scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+                        // ensure payment panel is in view
+                        try { this.$component && strongScrollIntoView(this.$component.get(0)); } catch (e) {}
 					} catch (e) {}
 				};
 
