@@ -73,7 +73,7 @@
 
 			/* Item Selector responsive grid and filter bar wrapping */
 			.items-selector .filter-section { display: flex; flex-wrap: wrap; gap: 8px; }
-			.items-selector .view-selected-wrapper { flex: 1 1 100%; display: flex; align-items: center; margin-top: 8px; }
+			.items-selector .view-selected-wrapper { flex: 0 0 100%; width: 100%; display: flex; align-items: center; margin-top: 8px; }
 			.items-selector .items-container { display: grid; grid-gap: var(--padding-sm); }
 			@media (max-width: 420px) { .items-selector .items-container { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 			@media (min-width: 421px) and (max-width: 640px) { .items-selector .items-container { grid-template-columns: repeat(3, minmax(0,1fr)); } }
@@ -82,7 +82,7 @@
 
 			/* Selected Items button pulse (mobile) */
 			@keyframes posBtnPulse { 0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, .35);} 70% { box-shadow: 0 0 0 8px rgba(0, 122, 255, 0);} 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0);} }
-			.items-selector .selected-items-btn { width: 100%; height: 36px; padding: 0 12px; font-size: 16px; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); animation: posBtnPulse 2s ease-out infinite; }
+			.items-selector .selected-items-btn { width: 100%; height: 44px; padding: 0 16px; font-size: 16px; font-weight: 600; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.12); animation: posBtnPulse 2s ease-out infinite; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
 			@media (min-width: 769px) { .items-selector .selected-items-btn { display: none; } }
 		`;
 		document.body.appendChild(style);
@@ -135,11 +135,11 @@
 
 			// Force wrapper to full width on mobile flex rows; prevent shrinking
 			if (wrapper) {
-				wrapper.style.cssText = 'flex: 0 0 100%; width:100%; margin-left:0; display:flex; align-items:center; margin-top:8px;';
+				wrapper.style.cssText = 'flex: 0 0 100% !important; width:100% !important; min-width:100%; margin-left:0; display:flex; align-items:center; margin-top:8px;';
 			}
 
 			// Ensure button full width and mobile-friendly
-			btn.style.cssText = 'display:none; width:100%; height:36px; padding:0 12px; font-size:16px; border:none; border-radius:var(--border-radius-md); background:#000000ff; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;';
+			btn.style.cssText = 'display:none; flex: 0 0 100%; width:100% !important; height:36px; padding:0 12px; font-size:16px; border:none; border-radius:var(--border-radius-md); background:#000000ff; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;';
 
 			// Initialize label with total selected count (if available)
 			try {
@@ -156,7 +156,13 @@
 			const updateBtnVisibility = () => {
 				try {
 					const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
-					btn.style.display = isMobile ? 'block' : 'none';
+					if (isMobile) {
+						btn.style.display = 'flex';
+						btn.style.alignItems = 'center';
+						btn.style.justifyContent = 'center';
+					} else {
+						btn.style.display = 'none';
+					}
 				} catch (e) {}
 			};
 			updateBtnVisibility();
@@ -170,6 +176,21 @@
 		injectStylesOnce();
 		enhanceAccessibility();
 		addViewSelectedItemsButton();
+
+		// Retry until the item selector renders to avoid timing/layout issues
+		try {
+			let tries = 0;
+			const iv = setInterval(() => {
+				const filter = document.querySelector('.items-selector .filter-section');
+				const hasBtn = filter && filter.querySelector('.selected-items-btn');
+				if (hasBtn || tries > 15) {
+					clearInterval(iv);
+					return;
+				}
+				addViewSelectedItemsButton();
+				tries++;
+			}, 600);
+		} catch (e) {}
 
 		// Monkey-patch POS Controller bits we customized in core, but now via app override
 		try {
