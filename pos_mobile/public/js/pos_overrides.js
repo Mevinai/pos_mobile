@@ -139,17 +139,10 @@
 				.item-details-container .item-cart-btn { display: none !important; }
 			}
 
-			/* Floating New Invoice button - Mobile Only */
+			/* Hide New Invoice button on mobile */
 			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) {
-				.pos-new-invoice-fab { position: fixed; top: 72px; right: 12px; height: 36px; padding: 0 14px; border-radius: var(--border-radius-md); background: var(--btn-primary); color: var(--neutral); border: none; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; z-index: 1500; box-shadow: 0 2px 8px rgba(0,0,0,.15); cursor: pointer; }
-				.pos-new-invoice-fab:active { transform: translateY(1px); filter: brightness(.95); }
-				@media (max-width: 480px) { .pos-new-invoice-fab { top: 84px; right: 8px; height: 34px; padding: 0 12px; font-size: 13px; } }
+				.point-of-sale-app > .past-order-summary .new-btn { display: none !important; }
 			}
-			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) {
-				.pos-new-invoice-fab { display: none !important; }
-			}
-			/* Only show the New Invoice FAB on POS page and mobile */
-			body.pos-mobile-active .pos-new-invoice-fab { display: flex !important; }
 
 			/* Desktop: Standard order summary layout */
 			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) {
@@ -332,33 +325,6 @@
 		}, 'addViewSelectedItemsButton');
 	}
 
-	// Add mobile-only New Invoice floating button
-	function addNewInvoiceFAB() {
-		return safeExecute(() => {
-			const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-			if (!isMobile) return;
-			
-			const container = document.querySelector(CONFIG.CLASSES.POS_CONTAINER);
-			if (!container) return;
-			if (document.querySelector('.pos-new-invoice-fab')) return;
-			
-			const btn = document.createElement('button');
-			btn.className = 'pos-new-invoice-fab';
-			btn.setAttribute('aria-label', frappe._('New Invoice'));
-			btn.textContent = frappe._('New');
-			btn.addEventListener('click', () => {
-				safeExecute(() => {
-					const ctrl = window.cur_pos;
-					if (ctrl && typeof ctrl.make_new_invoice === 'function') {
-						ctrl.make_new_invoice();
-					} else if (ctrl && typeof ctrl.order_summary?.events?.new_order === 'function') {
-						ctrl.order_summary.events.new_order();
-					}
-				}, 'newInvoiceFABClick');
-			});
-			document.body.appendChild(btn);
-		}, 'addNewInvoiceFAB');
-	}
 
 	// Main init
 	onPOSReady(() => {
@@ -367,7 +333,6 @@
 		injectStylesOnce();
 		enhanceAccessibility();
 		addViewSelectedItemsButton();
-		addNewInvoiceFAB();
 
 		// Ensure button exists after delayed renders
 			safeExecute(() => {
