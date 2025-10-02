@@ -135,31 +135,65 @@
 			.item-details-container .item-cart-btn .cart-count { margin-left: 8px; background: rgba(255,255,255,.2); padding: 2px 8px; border-radius: 12px; font-size: 14px; }
 			/* Mobile responsive CSS for New Invoice button */
 			@media screen and (max-width: 620px) {
+				.point-of-sale-app > .past-order-summary {
+					overflow: visible !important;
+					height: auto !important;
+					min-height: 100vh !important;
+				}
+				.point-of-sale-app > .past-order-summary .invoice-summary-wrapper {
+					width: 100% !important;
+					max-width: 100% !important;
+					height: auto !important;
+					min-height: 100vh !important;
+					overflow: visible !important;
+					position: relative !important;
+				}
+				.point-of-sale-app > .past-order-summary .abs-container {
+					position: relative !important;
+					height: auto !important;
+					min-height: 100vh !important;
+					padding: 16px !important;
+					overflow: visible !important;
+					display: flex !important;
+					flex-direction: column !important;
+				}
 				.point-of-sale-app > .past-order-summary .summary-btns {
 					display: flex !important;
 					flex-direction: column !important;
-					gap: 8px !important;
-					padding: 12px !important;
+					gap: 12px !important;
+					padding: 16px 0 !important;
 					margin: 0 !important;
+					position: sticky !important;
+					bottom: 0 !important;
+					background: var(--fg-color) !important;
+					border-top: 1px solid var(--border-color) !important;
+					margin-top: auto !important;
 				}
 				.point-of-sale-app > .past-order-summary .summary-btn {
 					width: 100% !important;
 					flex: none !important;
 					margin: 0 !important;
-					padding: 12px 16px !important;
+					padding: 16px 20px !important;
 					font-size: 16px !important;
 					font-weight: 600 !important;
 					border-radius: var(--border-radius-md) !important;
-					min-height: 48px !important;
+					min-height: 52px !important;
 					display: flex !important;
 					align-items: center !important;
 					justify-content: center !important;
+					box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
 				}
 				.point-of-sale-app > .past-order-summary .new-btn {
 					background-color: var(--btn-primary) !important;
 					color: var(--neutral) !important;
 					font-weight: 600 !important;
 					order: -1 !important; /* Make New Invoice button appear first */
+					box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+				}
+				/* Ensure all content is visible */
+				.point-of-sale-app > .past-order-summary .summary-container {
+					margin-bottom: 16px !important;
+					overflow: visible !important;
 				}
 			}
 		`;
