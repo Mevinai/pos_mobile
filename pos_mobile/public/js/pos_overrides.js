@@ -494,9 +494,24 @@
 						safeExecute(() => {
 							const ctrl = window.cur_pos;
 							const payment = ctrl && ctrl.payment;
+							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
 							if (payment && payment.__posMobileCanReturnToCheckout) {
 								payment.__posMobileCanReturnToCheckout = false;
-								payment.checkout();
+								if (isMobile) {
+									// On mobile: show cart (checkout) section, not the payment section
+									try {
+										ctrl.cart && ctrl.cart.toggle_component(true);
+										payment.toggle_component && payment.toggle_component(false);
+										const cartEl = ctrl.cart && ctrl.cart.$component && ctrl.cart.$component.get(0);
+										cartEl && strongScrollIntoView(cartEl);
+										// Show numpad focusing on qty to continue editing
+										ctrl.cart && ctrl.cart.toggle_numpad && ctrl.cart.toggle_numpad(true);
+										ctrl.cart && ctrl.cart.toggle_numpad_field_edit && ctrl.cart.toggle_numpad_field_edit('qty');
+									} catch (e) {}
+								} else {
+									// Non-mobile: keep original behavior by going back to Payment
+									payment.checkout();
+								}
 							}
 						}, 'autoReturnToCheckout');
 					}
