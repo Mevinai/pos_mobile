@@ -89,13 +89,13 @@
 		style.id = id;
 		style.textContent = `
 			/* Modernize payment cards and totals on both desktop and mobile */
-			.payment-container .submit-order-btn { position: static; width: 100%; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--btn-primary); color: var(--neutral); border-radius: var(--border-radius-md); margin-top: var(--padding-sm); transition: transform .08s ease, filter .16s ease; }
+			.payment-container .submit-order-btn { position: static; width: 100%; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--btn-primary); color: var(--neutral); border-radius: var(--border-radius-md); margin-top: var(--padding-sm); }
 			.payment-container .submit-order-btn:active { transform: translateY(1px); filter: brightness(.95); }
 			.payment-container .payment-modes { display: grid; grid-gap: 10px; }
 			@media (max-width: ${CONFIG.BREAKPOINTS.MOBILE}px) { .payment-container .payment-modes { grid-template-columns: 1fr; } }
 			@media (min-width: ${CONFIG.BREAKPOINTS.MOBILE + 1}px) and (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) { .payment-container .payment-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 			.payment-container .payment-mode-wrapper { margin: 0; }
-			.payment-container .mode-of-payment { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color); background: var(--bg-color); box-shadow: 0 1px 2px rgba(0,0,0,.05); transition: box-shadow .2s ease, border-color .2s ease, background .2s ease; }
+			.payment-container .mode-of-payment { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color); background: var(--bg-color); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
 			.payment-container .mode-of-payment:hover { box-shadow: 0 2px 6px rgba(0,0,0,.06); }
 			.payment-container .mode-of-payment.border-primary { border-color: var(--btn-primary); background: linear-gradient(0deg, rgba(0, 122, 255, .06), rgba(0,122,255,.06)); box-shadow: 0 0 0 1px rgba(0, 122, 255, .18) inset, 0 2px 6px rgba(0,0,0,.06); }
 			.payment-container .mode-of-payment.border-primary::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--btn-primary); opacity: .9; }
@@ -127,7 +127,7 @@
 			.items-selector .selected-items-btn { width: 100% !important; height: 36px; padding: 0 12px; font-size: 16px; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); animation: posBtnPulse 2s ease-out infinite; }
 			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) { .items-selector .selected-items-btn { display: flex !important; justify-content: center; align-items: center; } }
 			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) { .items-selector .selected-items-btn { display: none; } }
-			.cart-badge { position: absolute; top: 6px; right: 6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--btn-primary); color: var(--neutral); font-size: 12px; line-height: 20px; text-align: center; padding: 0 6px; display: none; z-index: 10; }
+			.cart-badge { position: absolute; top: 6px; left: 6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--btn-primary); color: var(--neutral); font-size: 12px; line-height: 20px; text-align: center; padding: 0 6px; display: none; z-index: 10; }
 			.item-wrapper { position: relative; }
 		`;
 		document.head.appendChild(style);
@@ -365,7 +365,7 @@
 							if (!badge) {
 								badge = document.createElement('div');
 								badge.className = 'cart-badge';
-								badge.style.cssText = 'position:absolute;top:6px;right:6px;min-width:20px;height:20px;border-radius:10px;background:var(--btn-primary);color:var(--neutral);font-size:12px;line-height:20px;text-align:center;padding:0 6px;display:none;';
+								badge.style.cssText = 'position:absolute;top:6px;left:6px;min-width:20px;height:20px;border-radius:10px;background:var(--btn-primary);color:var(--neutral);font-size:12px;line-height:20px;text-align:center;padding:0 6px;display:none;';
 								tile.style.position = 'relative';
 								tile.appendChild(badge);
 							}
