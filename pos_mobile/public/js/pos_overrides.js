@@ -133,6 +133,13 @@
 			.item-details-container .item-cart-btn { position: sticky; bottom: 0; width: 100%; height: 48px; margin-top: 16px; background: var(--btn-primary); color: var(--neutral); border: none; border-radius: var(--border-radius-md); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10; }
 			.item-details-container .item-cart-btn:active { transform: translateY(1px); filter: brightness(.95); }
 			.item-details-container .item-cart-btn .cart-count { margin-left: 8px; background: rgba(255,255,255,.2); padding: 2px 8px; border-radius: 12px; font-size: 14px; }
+			/* Ensure order summary action buttons are visible across viewports */
+			.point-of-sale-app > .past-order-summary { overflow: visible !important; }
+			.point-of-sale-app > .past-order-summary .invoice-summary-wrapper { width: 100% !important; overflow: visible !important; }
+			.point-of-sale-app > .past-order-summary .abs-container { position: relative !important; padding-bottom: 120px !important; }
+			.point-of-sale-app > .past-order-summary .summary-btns { position: sticky; bottom: 0; display: flex !important; gap: 8px; padding: 12px 16px; background: var(--bg-color); border-top: 1px solid var(--border-color); z-index: 2; }
+			.point-of-sale-app > .past-order-summary .summary-btn { flex: 1 1 auto; min-height: 40px; }
+			.point-of-sale-app > .past-order-summary .new-btn { background-color: var(--btn-primary) !important; color: var(--neutral) !important; border-color: var(--btn-primary) !important; }
 			/* Mobile responsive CSS for New Invoice button */
 			@media screen and (max-width: 620px) {
 				.point-of-sale-app > .past-order-summary {
