@@ -518,7 +518,7 @@
 								this.__posMobileCartClickHandler = null;
 							}
 						}, 'detachEditFinishListeners');
-						// Mobile: Auto-return to checkout after editing
+						// Mobile: Auto-return to checkout after editing (NOT payment)
 						safeExecute(() => {
 							const ctrl = window.cur_pos;
 							const payment = ctrl && ctrl.payment;
@@ -527,10 +527,15 @@
 							if (payment && payment.__posMobileCanReturnToCheckout && isMobile) {
 								payment.__posMobileCanReturnToCheckout = false;
 								try {
+									// Show cart (checkout) section, hide payment section
 									ctrl.cart && ctrl.cart.toggle_component(true);
 									payment.toggle_component && payment.toggle_component(false);
+									
+									// Scroll to cart/checkout section
 									const cartEl = ctrl.cart && ctrl.cart.$component && ctrl.cart.$component.get(0);
 									cartEl && strongScrollIntoView(cartEl);
+									
+									// Show numpad for quantity editing
 									ctrl.cart && ctrl.cart.toggle_numpad && ctrl.cart.toggle_numpad(true);
 									ctrl.cart && ctrl.cart.toggle_numpad_field_edit && ctrl.cart.toggle_numpad_field_edit('qty');
 								} catch (e) {}
