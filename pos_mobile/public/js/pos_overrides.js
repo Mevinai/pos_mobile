@@ -140,6 +140,11 @@
 			.point-of-sale-app > .past-order-summary .summary-btns { position: sticky; bottom: 0; display: flex !important; gap: 8px; padding: 12px 16px; background: var(--bg-color); border-top: 1px solid var(--border-color); z-index: 2; }
 			.point-of-sale-app > .past-order-summary .summary-btn { flex: 1 1 auto; min-height: 40px; }
 			.point-of-sale-app > .past-order-summary .new-btn { background-color: var(--btn-primary) !important; color: var(--neutral) !important; border-color: var(--btn-primary) !important; }
+
+			/* Prevent page header actions cutoff on POS */
+			body.pos-mobile-active .page-head { overflow: visible !important; }
+			body.pos-mobile-active .page-head .page-actions { flex-wrap: wrap !important; overflow: visible !important; gap: 6px; }
+			body.pos-mobile-active .page-head .page-actions .btn { white-space: nowrap !important; }
 			/* Mobile responsive CSS for New Invoice button */
 			@media screen and (max-width: 620px) {
 				.point-of-sale-app > .past-order-summary {
@@ -301,6 +306,8 @@
 
 	// Main init
 	onPOSReady(() => {
+		// mark body so header tweaks are scoped to POS only
+		try { document.body.classList.add('pos-mobile-active'); } catch (e) {}
 		injectStylesOnce();
 		enhanceAccessibility();
 		addViewSelectedItemsButton();
