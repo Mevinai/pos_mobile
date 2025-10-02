@@ -393,6 +393,68 @@
 				}, CONFIG.TIMING.POLLING_INTERVAL);
 			}
 		}, 'patchItemSelector');
+
+		// Patch PastOrderList to add auto-scroll when order is selected
+		safeExecute(() => {
+			if (erpnext?.PointOfSale?.PastOrderList && !erpnext.PointOfSale.PastOrderList.__posMobilePatched) {
+				erpnext.PointOfSale.PastOrderList.__posMobilePatched = true;
+				const POL = erpnext.PointOfSale.PastOrderList;
+				
+				const orig_bind_events = POL.prototype.bind_events;
+				POL.prototype.bind_events = function() {
+					// Call original bind_events first
+					orig_bind_events && orig_bind_events.call(this);
+					
+					// Override the click handler to add auto-scroll
+					const me = this;
+					this.$invoices_container.off('click', '.invoice-wrapper');
+					this.$invoices_container.on('click', '.invoice-wrapper', function() {
+						const invoice_clicked = $(this);
+						const invoice_doctype = invoice_clicked.attr('data-invoice-doctype');
+						const invoice_name = unescape(invoice_clicked.attr('data-invoice-name'));
+
+						$('.invoice-wrapper').removeClass('invoice-selected');
+						invoice_clicked.addClass('invoice-selected');
+
+						// Call the original event handler
+						me.events.open_invoice_data(invoice_doctype, invoice_name);
+						
+						// Auto-scroll to order summary after a short delay
+						safeExecute(() => {
+							setTimeout(() => {
+								const orderSummary = document.querySelector('.past-order-summary');
+								if (orderSummary) {
+									strongScrollIntoView(orderSummary);
+								}
+							}, CONFIG.TIMING.ANIMATION_DURATION);
+						}, 'recentOrderScroll');
+					});
+				};
+			}
+		}, 'patchPastOrderList');
+
+		// Patch PastOrderSummary to ensure scroll happens when summary is loaded
+		safeExecute(() => {
+			if (erpnext?.PointOfSale?.PastOrderSummary && !erpnext.PointOfSale.PastOrderSummary.__posMobilePatched) {
+				erpnext.PointOfSale.PastOrderSummary.__posMobilePatched = true;
+				const POS = erpnext.PointOfSale.PastOrderSummary;
+				
+				const orig_load_summary = POS.prototype.load_summary_of;
+				POS.prototype.load_summary_of = function(doc, after_submission = false) {
+					// Call original method
+					orig_load_summary && orig_load_summary.call(this, doc, after_submission);
+					
+					// Auto-scroll to the summary component after it's loaded
+					safeExecute(() => {
+						setTimeout(() => {
+							if (this.$component && this.$component.is(':visible')) {
+								strongScrollIntoView(this.$component.get(0));
+							}
+						}, CONFIG.TIMING.ANIMATION_DURATION + 100);
+					}, 'orderSummaryScroll');
+				};
+			}
+		}, 'patchPastOrderSummary');
 	});
 
 	// Expose minimal API for debugging
