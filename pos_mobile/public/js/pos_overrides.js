@@ -403,6 +403,7 @@
 							cart && cart.addEventListener('click', cartClickHandler, { capture: true });
 						}, 'attachEditFinishListeners');
 					}
+					
 					// When user finishes editing (details hidden), cleanup and return to checkout if needed
 					if (!show) {
 						// Always cleanup cart button and intervals
