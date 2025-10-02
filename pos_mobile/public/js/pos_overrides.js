@@ -129,36 +129,50 @@
 			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) { .items-selector .selected-items-btn { display: none; } }
 			.cart-badge { position: absolute; top: 6px; left: 6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--btn-primary); color: var(--neutral); font-size: 12px; line-height: 20px; text-align: center; padding: 0 6px; display: none; z-index: 10; }
 			.item-wrapper { position: relative; }
-			/* Item Details Cart Button */
-			.item-details-container .item-cart-btn { position: sticky; bottom: 0; width: 100%; height: 48px; margin-top: 16px; background: var(--btn-primary); color: var(--neutral); border: none; border-radius: var(--border-radius-md); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10; }
-			.item-details-container .item-cart-btn:active { transform: translateY(1px); filter: brightness(.95); }
-			.item-details-container .item-cart-btn .cart-count { margin-left: 8px; background: rgba(255,255,255,.2); padding: 2px 8px; border-radius: 12px; font-size: 14px; }
+			/* Item Details Cart Button - Mobile Only */
+			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) {
+				.item-details-container .item-cart-btn { position: sticky; bottom: 0; width: 100%; height: 48px; margin-top: 16px; background: var(--btn-primary); color: var(--neutral); border: none; border-radius: var(--border-radius-md); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10; }
+				.item-details-container .item-cart-btn:active { transform: translateY(1px); filter: brightness(.95); }
+				.item-details-container .item-cart-btn .cart-count { margin-left: 8px; background: rgba(255,255,255,.2); padding: 2px 8px; border-radius: 12px; font-size: 14px; }
+			}
+			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) {
+				.item-details-container .item-cart-btn { display: none !important; }
+			}
 
-			/* Floating New Invoice button inside POS app to avoid header cutoff */
-			.pos-new-invoice-fab { position: fixed; top: 72px; right: 12px; height: 36px; padding: 0 14px; border-radius: var(--border-radius-md); background: var(--btn-primary); color: var(--neutral); border: none; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; z-index: 1500; box-shadow: 0 2px 8px rgba(0,0,0,.15); cursor: pointer; }
-			.pos-new-invoice-fab:active { transform: translateY(1px); filter: brightness(.95); }
-			@media (max-width: 480px) { .pos-new-invoice-fab { top: 84px; right: 8px; height: 34px; padding: 0 12px; font-size: 13px; } }
-			/* Only show the New Invoice FAB on POS page */
+			/* Floating New Invoice button - Mobile Only */
+			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) {
+				.pos-new-invoice-fab { position: fixed; top: 72px; right: 12px; height: 36px; padding: 0 14px; border-radius: var(--border-radius-md); background: var(--btn-primary); color: var(--neutral); border: none; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; z-index: 1500; box-shadow: 0 2px 8px rgba(0,0,0,.15); cursor: pointer; }
+				.pos-new-invoice-fab:active { transform: translateY(1px); filter: brightness(.95); }
+				@media (max-width: 480px) { .pos-new-invoice-fab { top: 84px; right: 8px; height: 34px; padding: 0 12px; font-size: 13px; } }
+			}
+			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) {
+				.pos-new-invoice-fab { display: none !important; }
+			}
+			/* Only show the New Invoice FAB on POS page and mobile */
 			body.pos-mobile-active .pos-new-invoice-fab { display: flex !important; }
 
-			/* Ensure order summary action buttons are visible across viewports */
-			.point-of-sale-app > .past-order-summary { overflow: visible !important; }
-			.point-of-sale-app > .past-order-summary .invoice-summary-wrapper { width: 100% !important; overflow: visible !important; }
-			.point-of-sale-app > .past-order-summary .abs-container { position: relative !important; padding-bottom: 120px !important; }
-			.point-of-sale-app > .past-order-summary .summary-btns { position: sticky; bottom: 0; display: flex !important; gap: 8px; padding: 12px 16px; background: var(--bg-color); border-top: 1px solid var(--border-color); z-index: 2; }
-			.point-of-sale-app > .past-order-summary .summary-btn { flex: 1 1 auto; min-height: 40px; }
-			.point-of-sale-app > .past-order-summary .new-btn { background-color: var(--btn-primary) !important; color: var(--neutral) !important; border-color: var(--btn-primary) !important; }
+			/* Desktop: Standard order summary layout */
+			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) {
+				.point-of-sale-app > .past-order-summary { overflow: visible !important; }
+				.point-of-sale-app > .past-order-summary .invoice-summary-wrapper { width: 100% !important; overflow: visible !important; }
+				.point-of-sale-app > .past-order-summary .abs-container { position: relative !important; padding-bottom: 20px !important; }
+				.point-of-sale-app > .past-order-summary .summary-btns { position: sticky; bottom: 0; display: flex !important; gap: 8px; padding: 12px 16px; background: var(--bg-color); border-top: 1px solid var(--border-color); z-index: 2; }
+				.point-of-sale-app > .past-order-summary .summary-btn { flex: 1 1 auto; min-height: 40px; }
+				.point-of-sale-app > .past-order-summary .new-btn { background-color: var(--btn-primary) !important; color: var(--neutral) !important; border-color: var(--btn-primary) !important; }
+			}
 
-			/* Prevent page header actions cutoff on POS */
-			body.pos-mobile-active .page-head,
-			body.pos-mobile-active .page-head .container,
-			body.pos-mobile-active .page-head .page-actions,
-			body.pos-mobile-active .page-head .page-actions .custom-actions { overflow: visible !important; }
-			body.pos-mobile-active .page-head .container { max-width: 100% !important; width: 100% !important; padding-right: 12px !important; }
-			body.pos-mobile-active .page-head .page-actions { display: flex !important; flex-wrap: wrap !important; align-items: center !important; justify-content: flex-end !important; gap: 6px !important; padding-right: 8px !important; max-width: 100% !important; }
-			body.pos-mobile-active .page-head .page-actions > * { flex: 0 0 auto !important; }
-			body.pos-mobile-active .page-head .page-actions .btn { white-space: nowrap !important; padding: 4px 10px !important; font-size: 12px !important; line-height: 1.2 !important; }
-			body.pos-mobile-active .page-head .page-actions .primary-action { display: none !important; }
+			/* Mobile: Prevent page header actions cutoff on POS */
+			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) {
+				body.pos-mobile-active .page-head,
+				body.pos-mobile-active .page-head .container,
+				body.pos-mobile-active .page-head .page-actions,
+				body.pos-mobile-active .page-head .page-actions .custom-actions { overflow: visible !important; }
+				body.pos-mobile-active .page-head .container { max-width: 100% !important; width: 100% !important; padding-right: 12px !important; }
+				body.pos-mobile-active .page-head .page-actions { display: flex !important; flex-wrap: wrap !important; align-items: center !important; justify-content: flex-end !important; gap: 6px !important; padding-right: 8px !important; max-width: 100% !important; }
+				body.pos-mobile-active .page-head .page-actions > * { flex: 0 0 auto !important; }
+				body.pos-mobile-active .page-head .page-actions .btn { white-space: nowrap !important; padding: 4px 10px !important; font-size: 12px !important; line-height: 1.2 !important; }
+				body.pos-mobile-active .page-head .page-actions .primary-action { display: none !important; }
+			}
 			/* Mobile responsive CSS for New Invoice button */
 			@media screen and (max-width: 620px) {
 				.point-of-sale-app > .past-order-summary {
@@ -318,12 +332,16 @@
 		}, 'addViewSelectedItemsButton');
 	}
 
-	// Add always-visible New Invoice floating button inside POS app
+	// Add mobile-only New Invoice floating button
 	function addNewInvoiceFAB() {
 		return safeExecute(() => {
+			const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+			if (!isMobile) return;
+			
 			const container = document.querySelector(CONFIG.CLASSES.POS_CONTAINER);
 			if (!container) return;
 			if (document.querySelector('.pos-new-invoice-fab')) return;
+			
 			const btn = document.createElement('button');
 			btn.className = 'pos-new-invoice-fab';
 			btn.setAttribute('aria-label', frappe._('New Invoice'));
@@ -491,27 +509,22 @@
 								this.__posMobileCartCountInterval = null;
 							}
 						}, 'detachEditFinishListeners');
+						// Mobile: Auto-return to checkout after editing
 						safeExecute(() => {
 							const ctrl = window.cur_pos;
 							const payment = ctrl && ctrl.payment;
 							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-							if (payment && payment.__posMobileCanReturnToCheckout) {
+							
+							if (payment && payment.__posMobileCanReturnToCheckout && isMobile) {
 								payment.__posMobileCanReturnToCheckout = false;
-								if (isMobile) {
-									// On mobile: show cart (checkout) section, not the payment section
-									try {
-										ctrl.cart && ctrl.cart.toggle_component(true);
-										payment.toggle_component && payment.toggle_component(false);
-										const cartEl = ctrl.cart && ctrl.cart.$component && ctrl.cart.$component.get(0);
-										cartEl && strongScrollIntoView(cartEl);
-										// Show numpad focusing on qty to continue editing
-										ctrl.cart && ctrl.cart.toggle_numpad && ctrl.cart.toggle_numpad(true);
-										ctrl.cart && ctrl.cart.toggle_numpad_field_edit && ctrl.cart.toggle_numpad_field_edit('qty');
-									} catch (e) {}
-								} else {
-									// Non-mobile: keep original behavior by going back to Payment
-									payment.checkout();
-								}
+								try {
+									ctrl.cart && ctrl.cart.toggle_component(true);
+									payment.toggle_component && payment.toggle_component(false);
+									const cartEl = ctrl.cart && ctrl.cart.$component && ctrl.cart.$component.get(0);
+									cartEl && strongScrollIntoView(cartEl);
+									ctrl.cart && ctrl.cart.toggle_numpad && ctrl.cart.toggle_numpad(true);
+									ctrl.cart && ctrl.cart.toggle_numpad_field_edit && ctrl.cart.toggle_numpad_field_edit('qty');
+								} catch (e) {}
 							}
 						}, 'autoReturnToCheckout');
 					}
@@ -712,30 +725,38 @@
 			}
 		}, 'patchPastOrderSummary');
 
-		// Mobile: tap on quantity in cart increments qty without opening item details or leaving cart
+		// Mobile: tap on quantity in cart increments qty without opening item details
 		safeExecute(() => {
 			const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
 			if (!isMobile) return;
+			
 			const container = document.querySelector('.customer-cart-container');
 			if (!container) return;
+			
 			container.addEventListener('click', function (e) {
 				const qtyEl = e.target && e.target.closest && e.target.closest('.item-qty');
 				if (!qtyEl) return;
-				// prevent opening item details
+				
 				e.preventDefault();
 				e.stopPropagation();
+				
 				const wrapper = qtyEl.closest('.cart-item-wrapper');
 				if (!wrapper) return;
+				
 				const rowName = unescape(wrapper.getAttribute('data-row-name') || '');
 				const ctrl = window.cur_pos;
 				const frm = ctrl && ctrl.frm;
 				if (!frm || !rowName) return;
+				
 				const itemRow = (frm.doc.items || []).find(i => i.name === rowName);
 				if (!itemRow) return;
+				
 				const newQty = (parseFloat(itemRow.qty) || 0) + 1;
 				ctrl.on_cart_update({ field: 'qty', value: newQty, item: { name: rowName } }).then(() => {
-					// keep cart visible and optionally highlight qty edit on numpad
-					try { ctrl.cart.toggle_numpad(true); ctrl.cart.toggle_numpad_field_edit('qty'); } catch (err) {}
+					try { 
+						ctrl.cart.toggle_numpad(true); 
+						ctrl.cart.toggle_numpad_field_edit('qty'); 
+					} catch (err) {}
 				});
 			}, true);
 		}, 'mobileQtyTapIncrement');
