@@ -139,19 +139,22 @@
 					overflow: visible !important;
 					height: auto !important;
 					min-height: 100vh !important;
+					max-height: none !important;
 				}
 				.point-of-sale-app > .past-order-summary .invoice-summary-wrapper {
 					width: 100% !important;
 					max-width: 100% !important;
 					height: auto !important;
 					min-height: 100vh !important;
+					max-height: none !important;
 					overflow: visible !important;
 					position: relative !important;
 				}
 				.point-of-sale-app > .past-order-summary .abs-container {
 					position: relative !important;
 					height: auto !important;
-					min-height: 100vh !important;
+					min-height: calc(100vh - 120px) !important;
+					max-height: none !important;
 					padding: 16px !important;
 					overflow: visible !important;
 					display: flex !important;
@@ -163,16 +166,19 @@
 					gap: 12px !important;
 					padding: 16px 0 !important;
 					margin: 0 !important;
-					position: sticky !important;
+					position: fixed !important;
 					bottom: 0 !important;
+					left: 0 !important;
+					right: 0 !important;
 					background: var(--fg-color) !important;
 					border-top: 1px solid var(--border-color) !important;
-					margin-top: auto !important;
+					z-index: 1000 !important;
+					box-shadow: 0 -2px 8px rgba(0,0,0,0.1) !important;
 				}
 				.point-of-sale-app > .past-order-summary .summary-btn {
-					width: 100% !important;
+					width: calc(100% - 32px) !important;
 					flex: none !important;
-					margin: 0 !important;
+					margin: 0 16px !important;
 					padding: 16px 20px !important;
 					font-size: 16px !important;
 					font-weight: 600 !important;
@@ -190,10 +196,14 @@
 					order: -1 !important; /* Make New Invoice button appear first */
 					box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
 				}
-				/* Ensure all content is visible */
+				/* Ensure all content is visible and add bottom padding for fixed buttons */
 				.point-of-sale-app > .past-order-summary .summary-container {
 					margin-bottom: 16px !important;
 					overflow: visible !important;
+				}
+				/* Add bottom padding to prevent content from being hidden behind fixed buttons */
+				.point-of-sale-app > .past-order-summary .abs-container {
+					padding-bottom: 120px !important;
 				}
 			}
 		`;
