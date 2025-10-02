@@ -455,6 +455,55 @@
 				};
 			}
 		}, 'patchPastOrderSummary');
+
+		// Auto-confirm submission popup for POS Invoice
+		safeExecute(() => {
+			const Form = frappe?.ui?.form?.Form;
+			if (Form && !Form.__posMobileAutoConfirmPatched) {
+				Form.__posMobileAutoConfirmPatched = true;
+				const orig = Form.prototype.savesubmit;
+				Form.prototype.savesubmit = function (btn, callback, on_error) {
+					const isPOSInvoice = this?.doctype === 'POS Invoice' && window.cur_pos;
+					if (isPOSInvoice) {
+						const me = this;
+						return new Promise((resolve) => {
+							me.validate_form_action('Submit');
+							frappe.validated = true;
+							me.script_manager.trigger('before_submit').then(function () {
+								if (!frappe.validated) {
+									return me.handle_save_fail(btn, on_error);
+								}
+								me.save(
+									'Submit',
+									function (r) {
+										if (r.exc) {
+											me.handle_save_fail(btn, on_error);
+										} else {
+											frappe.utils.play_sound('submit');
+											callback && callback();
+											me.script_manager
+												.trigger('on_submit')
+												.then(() => resolve(me))
+												.then(() => {
+													if (frappe.route_hooks?.after_submit) {
+														let route_callback = frappe.route_hooks.after_submit;
+														delete frappe.route_hooks.after_submit;
+														route_callback(me);
+													}
+												});
+										}
+									},
+									btn,
+									() => me.handle_save_fail(btn, on_error),
+									resolve
+								);
+							});
+						});
+					}
+					return orig ? orig.call(this, btn, callback, on_error) : undefined;
+				};
+			}
+		}, 'autoConfirmSubmitPOS');
 	});
 
 	// Expose minimal API for debugging
