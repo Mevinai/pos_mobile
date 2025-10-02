@@ -504,6 +504,52 @@
 				};
 			}
 		}, 'autoConfirmSubmitPOS');
+
+		// Intercept "Complete Order" button to force auto-submit without confirmation
+		safeExecute(() => {
+			let handlerAttached = false;
+			const attach = () => {
+				if (handlerAttached) return;
+				const container = document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
+				if (!container) return;
+				document.addEventListener('click', function onClick(e) {
+					const btn = e.target && (e.target.closest && e.target.closest('.payment-container .submit-order-btn'));
+					if (!btn) return;
+					// Stop the original handler (which triggers savesubmit confirmation)
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					const ctrl = window.cur_pos;
+					const frm = ctrl && ctrl.frm;
+					if (!frm) return;
+					// Run basic validations similar to core
+					const doc = frm.doc || {};
+					const has_items = Array.isArray(doc.items) && doc.items.length > 0;
+					const fully_discounted = cint && cint(frappe.sys_defaults.disable_rounded_total) ? 0 : 0; // placeholder, rely on server validations
+					if (!has_items) {
+						frappe.show_alert({ message: frappe._('You cannot submit empty order.'), indicator: 'orange' });
+						frappe.utils.play_sound('error');
+						return;
+					}
+					// Submit without confirmation
+					frm.save('Submit', (r) => {
+						if (!r || r.exc) return;
+						try {
+							ctrl.toggle_components(false);
+							ctrl.order_summary.toggle_component(true);
+							ctrl.order_summary.load_summary_of(frm.doc, true);
+						} catch (err) { /* no-op */ }
+						frappe.show_alert({
+							indicator: 'green',
+							message: frappe._('POS invoice {0} created successfully').replace('{0}', (r.doc && r.doc.name) || frm.doc.name || '')
+						});
+					});
+				}, true);
+				handlerAttached = true;
+			};
+			// try now and after slight delay for late renders
+			attach();
+			setTimeout(attach, CONFIG.TIMING.RETRY_DELAY);
+		}, 'interceptCompleteOrder');
 	});
 
 	// Expose minimal API for debugging
