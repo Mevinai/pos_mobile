@@ -9,11 +9,11 @@
 	// Configuration and constants
 	const CONFIG = {
 		TIMING: {
-			POLLING_INTERVAL: 1500,
+			POLLING_INTERVAL: 100,
 			RETRY_ATTEMPTS: 20,
-			RETRY_DELAY: 600,
-			SCROLL_DELAY: 120,
-			ANIMATION_DURATION: 200
+			RETRY_DELAY: 100,
+			SCROLL_DELAY: 80,
+			ANIMATION_DURATION: 100
 		},
 		CLASSES: {
 			POS_CONTAINER: '.point-of-sale-app',
@@ -129,6 +129,10 @@
 			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) { .items-selector .selected-items-btn { display: none; } }
 			.cart-badge { position: absolute; top: 6px; left: 6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--btn-primary); color: var(--neutral); font-size: 12px; line-height: 20px; text-align: center; padding: 0 6px; display: none; z-index: 10; }
 			.item-wrapper { position: relative; }
+			/* Item Details Cart Button */
+			.item-details-container .item-cart-btn { position: sticky; bottom: 0; width: 100%; height: 48px; margin-top: 16px; background: var(--btn-primary); color: var(--neutral); border: none; border-radius: var(--border-radius-md); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10; }
+			.item-details-container .item-cart-btn:active { transform: translateY(1px); filter: brightness(.95); }
+			.item-details-container .item-cart-btn .cart-count { margin-left: 8px; background: rgba(255,255,255,.2); padding: 2px 8px; border-radius: 12px; font-size: 14px; }
 		`;
 		document.head.appendChild(style);
 	}
@@ -155,7 +159,10 @@
 					}
 				}, 'updateCartButtonCount');
 			};
-			setInterval(updateCartButtonCount, CONFIG.TIMING.POLLING_INTERVAL);
+			setInterval(() => {
+				if (document.hidden) return;
+				updateCartButtonCount();
+			}, CONFIG.TIMING.POLLING_INTERVAL);
 		}, 'enhanceAccessibility');
 	}
 
@@ -206,7 +213,7 @@
 				}, 'updateBtnVisibility');
 			};
 			updateBtnVisibility();
-			window.addEventListener('resize', updateBtnVisibility);
+			window.addEventListener('resize', updateBtnVisibility, { passive: true });
 
 			btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
 		}, 'addViewSelectedItemsButton');
@@ -219,9 +226,10 @@
 		addViewSelectedItemsButton();
 
 		// Ensure button exists after delayed renders
-		safeExecute(() => {
+			safeExecute(() => {
 			let tries = 0;
 			const iv = setInterval(() => {
+					if (document.hidden) return;
 				const filter = document.querySelector('.items-selector .filter-section');
 				const hasBtn = filter && filter.querySelector('.selected-items-btn');
 				if (hasBtn || tries > 15) {
@@ -270,6 +278,97 @@
 					orig_toggle && orig_toggle.call(this, show);
 					if (show) {
 						safeExecute(() => { this.$component && strongScrollIntoView(this.$component.get(0)); }, 'itemDetailsScroll');
+						
+						// Add cart button to item details
+						safeExecute(() => {
+							const self = this;
+							if (!this.$component) return;
+							
+							// Remove existing cart button if any
+							this.$component.find('.item-cart-btn').remove();
+							
+							// Create cart button
+							const cartBtn = $('<button class="item-cart-btn">');
+							cartBtn.html(`${frappe._('Item Cart')} <span class="cart-count">0</span>`);
+							
+							// Update cart count
+							const updateCartCount = () => {
+								const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
+								const doc = frm ? frm.doc : {};
+								const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+								cartBtn.find('.cart-count').text(total_qty);
+							};
+							updateCartCount();
+							
+							// Add click handler to return to checkout
+							cartBtn.on('click', () => {
+								self.toggle_component(false);
+							});
+							
+							// Append to component
+							this.$component.append(cartBtn);
+							
+							// Update count periodically
+							this.__posMobileCartCountInterval = setInterval(updateCartCount, 500);
+						}, 'addItemDetailsCartButton');
+						
+						// attach outside-click and input blur/change to finish edit and return
+						safeExecute(() => {
+							const self = this;
+							const outsideHandler = function (e) {
+								if (!self.$component || !self.$component.is(':visible')) return;
+								const el = self.$component.get(0);
+								if (el && !el.contains(e.target)) {
+									self.toggle_component(false);
+								}
+							};
+							const blurHandler = function (e) {
+								// when inputs lose focus, close if click moved outside too (handled above)
+							};
+							const cartClickHandler = function () {
+								// user clicked the cart area: close
+								self.toggle_component(false);
+							};
+							this.__posMobileOutsideClickHandler = outsideHandler;
+							document.addEventListener('mousedown', outsideHandler, true);
+							document.addEventListener('touchstart', outsideHandler, { capture: true, passive: true });
+							// optional: listen for blur on inputs
+							this.$component && this.$component.find('input,select,textarea').on('blur.pos_mobile_edit', blurHandler);
+							// listen for clicks on cart container
+							const cart = document.querySelector('.customer-cart-container');
+							this.__posMobileCartClickHandler = cartClickHandler;
+							cart && cart.addEventListener('click', cartClickHandler, { capture: true });
+						}, 'attachEditFinishListeners');
+					}
+					// When user finishes editing (details hidden), return to checkout if it was open before
+					if (!show) {
+						// detach listeners and cleanup
+						safeExecute(() => {
+							if (this.__posMobileOutsideClickHandler) {
+								document.removeEventListener('mousedown', this.__posMobileOutsideClickHandler, true);
+								document.removeEventListener('touchstart', this.__posMobileOutsideClickHandler, { capture: true });
+								this.__posMobileOutsideClickHandler = null;
+							}
+							this.$component && this.$component.find('input,select,textarea').off('blur.pos_mobile_edit');
+							const cart = document.querySelector('.customer-cart-container');
+							if (cart && this.__posMobileCartClickHandler) {
+								cart.removeEventListener('click', this.__posMobileCartClickHandler, { capture: true });
+								this.__posMobileCartClickHandler = null;
+							}
+							// Clear cart count interval
+							if (this.__posMobileCartCountInterval) {
+								clearInterval(this.__posMobileCartCountInterval);
+								this.__posMobileCartCountInterval = null;
+							}
+						}, 'detachEditFinishListeners');
+						safeExecute(() => {
+							const ctrl = window.cur_pos;
+							const payment = ctrl && ctrl.payment;
+							if (payment && payment.__posMobileCanReturnToCheckout) {
+								payment.__posMobileCanReturnToCheckout = false;
+								payment.checkout();
+							}
+						}, 'autoReturnToCheckout');
 					}
 				};
 			}
@@ -324,9 +423,12 @@
 				P.prototype.checkout = function () {
 					orig_checkout && orig_checkout.call(this);
 					safeExecute(() => {
+						this.__posMobileWasInCheckout = true;
+						this.__posMobileCanReturnToCheckout = false;
 						if (this._pos_mobile_refresh) clearInterval(this._pos_mobile_refresh);
 						this._pos_mobile_refresh = setInterval(() => {
 							safeExecute(() => {
+								if (document.hidden) return;
 								const doc = this.events.get_frm().doc;
 								this.update_totals_section(doc);
 								this.render_payment_mode_dom();
@@ -334,6 +436,15 @@
 						}, 1000);
 						safeExecute(() => { this.$component && strongScrollIntoView(this.$component.get(0)); }, 'paymentScroll');
 					}, 'paymentCheckout');
+				};
+
+				// wrap edit_cart to mark intent to return to checkout after edits
+				const orig_edit_cart = P.prototype.edit_cart;
+				P.prototype.edit_cart = function () {
+					if (this.__posMobileWasInCheckout) {
+						this.__posMobileCanReturnToCheckout = true;
+					}
+					orig_edit_cart && orig_edit_cart.call(this);
 				};
 
 				const orig_toggle_pay = P.prototype.toggle_component;
@@ -456,55 +567,6 @@
 			}
 		}, 'patchPastOrderSummary');
 
-		// Auto-confirm submission popup for POS Invoice
-		safeExecute(() => {
-			const Form = frappe?.ui?.form?.Form;
-			if (Form && !Form.__posMobileAutoConfirmPatched) {
-				Form.__posMobileAutoConfirmPatched = true;
-				const orig = Form.prototype.savesubmit;
-				Form.prototype.savesubmit = function (btn, callback, on_error) {
-					const isPOSInvoice = this?.doctype === 'POS Invoice' && window.cur_pos;
-					if (isPOSInvoice) {
-						const me = this;
-						return new Promise((resolve) => {
-							me.validate_form_action('Submit');
-							frappe.validated = true;
-							me.script_manager.trigger('before_submit').then(function () {
-								if (!frappe.validated) {
-									return me.handle_save_fail(btn, on_error);
-								}
-								me.save(
-									'Submit',
-									function (r) {
-										if (r.exc) {
-											me.handle_save_fail(btn, on_error);
-										} else {
-											frappe.utils.play_sound('submit');
-											callback && callback();
-											me.script_manager
-												.trigger('on_submit')
-												.then(() => resolve(me))
-												.then(() => {
-													if (frappe.route_hooks?.after_submit) {
-														let route_callback = frappe.route_hooks.after_submit;
-														delete frappe.route_hooks.after_submit;
-														route_callback(me);
-													}
-												});
-										}
-									},
-									btn,
-									() => me.handle_save_fail(btn, on_error),
-									resolve
-								);
-							});
-						});
-					}
-					return orig ? orig.call(this, btn, callback, on_error) : undefined;
-				};
-			}
-		}, 'autoConfirmSubmitPOS');
-
 		// Intercept "Complete Order" button to force auto-submit without confirmation
 		safeExecute(() => {
 			let handlerAttached = false;
@@ -512,7 +574,7 @@
 				if (handlerAttached) return;
 				const container = document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
 				if (!container) return;
-				document.addEventListener('click', function onClick(e) {
+			document.addEventListener('click', function onClick(e) {
 					const btn = e.target && (e.target.closest && e.target.closest('.payment-container .submit-order-btn'));
 					if (!btn) return;
 					// Stop the original handler (which triggers savesubmit confirmation)
@@ -524,7 +586,6 @@
 					// Run basic validations similar to core
 					const doc = frm.doc || {};
 					const has_items = Array.isArray(doc.items) && doc.items.length > 0;
-					const fully_discounted = cint && cint(frappe.sys_defaults.disable_rounded_total) ? 0 : 0; // placeholder, rely on server validations
 					if (!has_items) {
 						frappe.show_alert({ message: frappe._('You cannot submit empty order.'), indicator: 'orange' });
 						frappe.utils.play_sound('error');
