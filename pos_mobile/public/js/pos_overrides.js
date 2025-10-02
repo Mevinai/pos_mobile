@@ -423,13 +423,17 @@
 					if (show) {
 						safeExecute(() => { this.$component && strongScrollIntoView(this.$component.get(0)); }, 'itemDetailsScroll');
 						
-						// Add cart button to item details
+						// Add cart button to item details (Mobile only)
 						safeExecute(() => {
 							const self = this;
 							if (!this.$component) return;
 							
-							// Remove existing cart button if any
+							// Always remove existing cart button first
 							this.$component.find('.item-cart-btn').remove();
+							if (this.__posMobileCartCountInterval) {
+								clearInterval(this.__posMobileCartCountInterval);
+								this.__posMobileCartCountInterval = null;
+							}
 							
 							// Only show this button on mobile screens
 							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
@@ -488,10 +492,20 @@
 							cart && cart.addEventListener('click', cartClickHandler, { capture: true });
 						}, 'attachEditFinishListeners');
 					}
-					// When user finishes editing (details hidden), return to checkout if it was open before
+					// When user finishes editing (details hidden), cleanup and return to checkout if needed
 					if (!show) {
-						// detach listeners and cleanup
+						// Always cleanup cart button and intervals
 						safeExecute(() => {
+							// Remove cart button
+							this.$component && this.$component.find('.item-cart-btn').remove();
+							
+							// Clear cart count interval
+							if (this.__posMobileCartCountInterval) {
+								clearInterval(this.__posMobileCartCountInterval);
+								this.__posMobileCartCountInterval = null;
+							}
+							
+							// Detach listeners
 							if (this.__posMobileOutsideClickHandler) {
 								document.removeEventListener('mousedown', this.__posMobileOutsideClickHandler, true);
 								document.removeEventListener('touchstart', this.__posMobileOutsideClickHandler, { capture: true });
@@ -502,11 +516,6 @@
 							if (cart && this.__posMobileCartClickHandler) {
 								cart.removeEventListener('click', this.__posMobileCartClickHandler, { capture: true });
 								this.__posMobileCartClickHandler = null;
-							}
-							// Clear cart count interval
-							if (this.__posMobileCartCountInterval) {
-								clearInterval(this.__posMobileCartCountInterval);
-								this.__posMobileCartCountInterval = null;
 							}
 						}, 'detachEditFinishListeners');
 						// Mobile: Auto-return to checkout after editing
