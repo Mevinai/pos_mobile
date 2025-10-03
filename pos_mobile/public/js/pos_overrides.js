@@ -335,7 +335,7 @@
 		addViewSelectedItemsButton();
 
 		// Ensure button exists after delayed renders
-		safeExecute(() => {
+			safeExecute(() => {
 			let tries = 0;
 			const iv = setInterval(() => {
 					if (document.hidden) return;
