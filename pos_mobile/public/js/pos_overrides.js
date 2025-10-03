@@ -4,7 +4,14 @@
 // Keep everything idempotent and scoped.
 
 (function () {
-	if (!window.frappe) return;
+	console.log('[POS Mobile] Starting initialization...');
+	
+	if (!window.frappe) {
+		console.error('[POS Mobile] ERROR: Frappe framework not found!');
+		return;
+	}
+	
+	console.log('[POS Mobile] Frappe framework detected');
 
 	// Configuration and constants
 	const CONFIG = {
@@ -328,11 +335,18 @@
 
 	// Main init
 	onPOSReady(() => {
+		console.log('[POS Mobile] POS container detected - initializing features...');
+		
 		// mark body so header tweaks are scoped to POS only
 		try { document.body.classList.add('pos-mobile-active'); } catch (e) {}
 		injectStylesOnce();
+		console.log('[POS Mobile] Styles injected');
+		
 		enhanceAccessibility();
+		console.log('[POS Mobile] Accessibility enhanced');
+		
 		addViewSelectedItemsButton();
+		console.log('[POS Mobile] Item cart button added');
 
 		// Ensure button exists after delayed renders
 			safeExecute(() => {
@@ -740,13 +754,20 @@
 			}, true);
 		}, 'mobileQtyTapIncrement');
 
+		console.log('[POS Mobile] Patching components complete');
+		
 		// Intercept "Complete Order" button to force auto-submit without confirmation
+		console.log('[POS Mobile] Setting up Complete Order auto-confirmation...');
 		safeExecute(() => {
 			let handlerAttached = false;
 			const attach = () => {
 				if (handlerAttached) return;
 				const container = document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
-				if (!container) return;
+				if (!container) {
+					console.log('[POS Mobile] Payment container not found yet, retrying...');
+					return;
+				}
+				console.log('[POS Mobile] Complete Order handler attached');
 			document.addEventListener('click', function onClick(e) {
 					const btn = e.target && (e.target.closest && e.target.closest('.payment-container .submit-order-btn'));
 					if (!btn) return;
@@ -791,5 +812,7 @@
 		config: CONFIG,
 		scrollToView: strongScrollIntoView
 	};
+	
+	console.log('[POS Mobile] Initialization complete! Available as window.POSMobile');
 
-})();
+})(); 
