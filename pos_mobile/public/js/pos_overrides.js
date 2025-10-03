@@ -34,27 +34,51 @@
 		}
 	};
 
-	// Utility functions
+	// Enhanced error handling
 	const safeExecute = (fn, context = '', fallback = null) => {
-		try { return fn(); } catch (error) { console.warn(`[POS Mobile] ${context}:`, error); return fallback; }
+		try {
+			return fn();
+		} catch (error) {
+			console.warn(`[POS Mobile] ${context}:`, error);
+			return fallback;
+		}
 	};
-	
-	const isMobile = () => (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-	
-	const strongScrollIntoView = (element) => safeExecute(() => {
-		const el = element?.jquery ? element.get(0) : element;
-		if (!el) return;
-		const doScroll = () => el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
-		requestAnimationFrame ? requestAnimationFrame(() => { doScroll(); setTimeout(doScroll, CONFIG.TIMING.SCROLL_DELAY); }) : (doScroll(), setTimeout(doScroll, CONFIG.TIMING.SCROLL_DELAY));
-	}, 'strongScrollIntoView');
-	
-	const onPOSReady = (cb) => {
+
+	// Enhanced smooth scroll helper
+	function strongScrollIntoView(element) {
+		return safeExecute(() => {
+			const el = element && element.jquery ? element.get(0) : element;
+			if (!el) return;
+
+			const doScroll = () => el.scrollIntoView({
+				behavior: 'smooth',
+				block: 'start',
+				inline: 'nearest'
+			});
+
+			if (window.requestAnimationFrame) {
+				requestAnimationFrame(() => {
+					doScroll();
+					setTimeout(doScroll, CONFIG.TIMING.SCROLL_DELAY);
+				});
+			} else {
+				doScroll();
+				setTimeout(doScroll, CONFIG.TIMING.SCROLL_DELAY);
+			}
+		}, 'strongScrollIntoView');
+	}
+
+	// Wait for POS to be ready with improved retry logic
+	function onPOSReady(cb) {
 		const check = setInterval(() => {
-			if (document.querySelector(CONFIG.CLASSES.POS_CONTAINER) || document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER)) {
-				clearInterval(check); cb();
+			const container = document.querySelector(CONFIG.CLASSES.POS_CONTAINER) ||
+							document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
+			if (container) {
+				clearInterval(check);
+				cb();
 			}
 		}, CONFIG.TIMING.RETRY_DELAY);
-	};
+	}
 
 	// Inject styles
 	function injectStylesOnce() {
@@ -220,62 +244,86 @@
 	}
 
 	// Accessibility + cart button count
-	const enhanceAccessibility = () => safeExecute(() => {
-		const totals = document.querySelector('.payment-container .totals');
-		if (totals) {
-			totals.setAttribute('role', 'region');
-			totals.setAttribute('aria-live', 'polite');
-			totals.setAttribute('aria-label', frappe._('Payment totals'));
-		}
-		const updateCartButtonCount = () => safeExecute(() => {
-			const frm = cur_pos?.frm || locals?.cur_frm;
-			const total_qty = (frm?.doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
-			const btn = document.querySelector('.items-selector .selected-items-btn');
-			if (btn) {
-				const baseLabel = frappe._('Item Cart');
-				btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
+	function enhanceAccessibility() {
+		return safeExecute(() => {
+			const totals = document.querySelector('.payment-container .totals');
+			if (totals) {
+				totals.setAttribute('role', 'region');
+				totals.setAttribute('aria-live', 'polite');
+				totals.setAttribute('aria-label', frappe._('Payment totals'));
 			}
-		}, 'updateCartButtonCount');
-		setInterval(() => { if (!document.hidden) updateCartButtonCount(); }, CONFIG.TIMING.POLLING_INTERVAL);
-	}, 'enhanceAccessibility');
+
+			const updateCartButtonCount = () => {
+				safeExecute(() => {
+					const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
+					const doc = frm ? frm.doc : {};
+					const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+					const btn = document.querySelector('.items-selector .selected-items-btn');
+					if (btn) {
+						const baseLabel = frappe._('Item Cart');
+						btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
+					}
+				}, 'updateCartButtonCount');
+			};
+			setInterval(() => {
+				if (document.hidden) return;
+				updateCartButtonCount();
+			}, CONFIG.TIMING.POLLING_INTERVAL);
+		}, 'enhanceAccessibility');
+	}
 
 	// Add Item Cart button with scrolling
-	const addViewSelectedItemsButton = () => safeExecute(() => {
-		const filter = document.querySelector('.items-selector .filter-section');
-		const cartContainer = document.querySelector('.customer-cart-container');
-		if (!filter || !cartContainer) return;
+	function addViewSelectedItemsButton() {
+		return safeExecute(() => {
+			const filter = document.querySelector('.items-selector .filter-section');
+			const cartContainer = document.querySelector('.customer-cart-container');
+			if (!filter || !cartContainer) return;
 
-		let btn = filter.querySelector('.selected-items-btn');
-		let wrapper = btn?.closest('.view-selected-wrapper');
-		if (!btn) {
-			wrapper = document.createElement('div');
-			wrapper.className = 'view-selected-wrapper';
-			btn = document.createElement('button');
-			btn.className = 'view-selected-btn selected-items-btn';
-			btn.setAttribute('aria-label', frappe._('Item Cart'));
-			wrapper.appendChild(btn);
-			filter.appendChild(wrapper);
-		}
+			let btn = filter.querySelector('.selected-items-btn');
+			let wrapper = btn ? btn.closest('.view-selected-wrapper') : null;
+			if (!btn) {
+				wrapper = document.createElement('div');
+				wrapper.className = 'view-selected-wrapper';
+				const newBtn = document.createElement('button');
+				newBtn.className = 'view-selected-btn selected-items-btn';
+				newBtn.setAttribute('aria-label', frappe._('Item Cart'));
+				btn = newBtn;
+				wrapper.appendChild(btn);
+				filter.appendChild(wrapper);
+			}
 
-		wrapper && (wrapper.style.cssText = 'flex: 0 0 100% !important; width:100% !important; min-width:100%; margin-left:0; display:flex; align-items:center; margin-top:8px;');
-		btn.style.cssText = 'display:none; flex: 0 0 100%; width:100% !important; height:36px; padding:0 12px; font-size:16px; border:none; border-radius:var(--border-radius-md); background:#000000ff; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;';
+			if (wrapper) {
+				wrapper.style.cssText = 'flex: 0 0 100% !important; width:100% !important; min-width:100%; margin-left:0; display:flex; align-items:center; margin-top:8px;';
+			}
 
-		safeExecute(() => {
-			const frm = cur_pos?.frm || locals?.cur_frm;
-			const total_qty = (frm?.doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
-			const baseLabel = frappe._('Item Cart');
-			btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
-		}, 'initializeCartButton');
+			btn.style.cssText = 'display:none; flex: 0 0 100%; width:100% !important; height:36px; padding:0 12px; font-size:16px; border:none; border-radius:var(--border-radius-md); background:#000000ff; color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;';
 
-		const updateBtnVisibility = () => safeExecute(() => {
-			btn.style.display = isMobile() ? 'flex' : 'none';
-			if (isMobile()) { btn.style.alignItems = 'center'; btn.style.justifyContent = 'center'; }
-		}, 'updateBtnVisibility');
-		
-		updateBtnVisibility();
-		window.addEventListener('resize', updateBtnVisibility, { passive: true });
-		btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
-	}, 'addViewSelectedItemsButton');
+			safeExecute(() => {
+				const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
+				const doc = frm ? frm.doc : {};
+				const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+				const baseLabel = frappe._('Item Cart');
+				btn.textContent = total_qty > 0 ? `${baseLabel} (${total_qty})` : baseLabel;
+			}, 'initializeCartButton');
+
+			const updateBtnVisibility = () => {
+				safeExecute(() => {
+					const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+					if (isMobile) {
+						btn.style.display = 'flex';
+						btn.style.alignItems = 'center';
+						btn.style.justifyContent = 'center';
+					} else {
+						btn.style.display = 'none';
+					}
+				}, 'updateBtnVisibility');
+			};
+			updateBtnVisibility();
+			window.addEventListener('resize', updateBtnVisibility, { passive: true });
+
+			btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
+		}, 'addViewSelectedItemsButton');
+	}
 
 
 	// Main init
@@ -290,11 +338,15 @@
 		safeExecute(() => {
 			let tries = 0;
 			const iv = setInterval(() => {
-				if (document.hidden) return;
+					if (document.hidden) return;
 				const filter = document.querySelector('.items-selector .filter-section');
-				const hasBtn = filter?.querySelector('.selected-items-btn');
-				if (hasBtn || tries > 15) { clearInterval(iv); return; }
-				addViewSelectedItemsButton(); tries++;
+				const hasBtn = filter && filter.querySelector('.selected-items-btn');
+				if (hasBtn || tries > 15) {
+					clearInterval(iv);
+					return;
+				}
+				addViewSelectedItemsButton();
+				tries++;
 			}, CONFIG.TIMING.RETRY_DELAY);
 		}, 'retryItemSelector');
 
@@ -349,7 +401,8 @@
 							}
 							
 							// Only show this button on mobile screens
-							if (!isMobile()) return;
+							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+							if (!isMobile) return;
 							
 							// Create cart button
 							const cartBtn = $('<button class="item-cart-btn">');
@@ -357,8 +410,9 @@
 							
 							// Update cart count
 							const updateCartCount = () => {
-								const frm = cur_pos?.frm || locals?.cur_frm;
-								const total_qty = (frm?.doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+								const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
+								const doc = frm ? frm.doc : {};
+								const total_qty = (doc?.items || []).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
 								cartBtn.find('.cart-count').text(total_qty);
 							};
 							updateCartCount();
@@ -403,7 +457,6 @@
 							cart && cart.addEventListener('click', cartClickHandler, { capture: true });
 						}, 'attachEditFinishListeners');
 					}
-					
 					// When user finishes editing (details hidden), cleanup and return to checkout if needed
 					if (!show) {
 						// Always cleanup cart button and intervals
@@ -434,8 +487,9 @@
 						safeExecute(() => {
 							const ctrl = window.cur_pos;
 							const payment = ctrl && ctrl.payment;
+							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
 							
-							if (payment && payment.__posMobileCanReturnToCheckout && isMobile()) {
+							if (payment && payment.__posMobileCanReturnToCheckout && isMobile) {
 								payment.__posMobileCanReturnToCheckout = false;
 								try {
 									// Show cart (checkout) section, hide payment section
@@ -547,8 +601,11 @@
 			if (IS && !IS.prototype.update_cart_badges) {
 				IS.prototype.update_cart_badges = function () {
 					safeExecute(() => {
-						const items = this.events.get_frm()?.doc?.items || [];
-						document.querySelectorAll('.items-selector .item-wrapper').forEach((tile) => {
+						const frm = this.events.get_frm();
+						const doc = frm?.doc || {};
+						const items = doc.items || [];
+						const tileList = document.querySelectorAll('.items-selector .item-wrapper');
+						tileList.forEach((tile) => {
 							const code = unescape(tile.getAttribute('data-item-code') || '');
 							const uom = unescape(tile.getAttribute('data-uom') || '');
 							const qty = items.filter((i) => i.item_code === code && (!uom || i.uom === uom)).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
@@ -560,9 +617,14 @@
 								tile.style.position = 'relative';
 								tile.appendChild(badge);
 							}
-							badge.textContent = qty;
-							badge.style.display = qty > 0 ? 'inline-block' : 'none';
+							if (qty > 0) {
+								badge.textContent = qty;
+								badge.style.display = 'inline-block';
+							} else {
+								badge.style.display = 'none';
+							}
 						});
+
 						const btn = document.querySelector('.items-selector .selected-items-btn');
 						if (btn) {
 							const total_qty = items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
@@ -644,7 +706,8 @@
 
 		// Mobile: tap on quantity in cart increments qty without opening item details
 		safeExecute(() => {
-			if (!isMobile()) return;
+			const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+			if (!isMobile) return;
 			
 			const container = document.querySelector('.customer-cart-container');
 			if (!container) return;
