@@ -122,6 +122,13 @@
 			.payment-container .totals-section .totals .remaining-amount .value.text-danger { color: var(--red-600, #dc2626); }
 			.payment-container .totals-section .totals .remaining-amount .value.text-success { color: var(--green-600, #16a34a); }
 			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) { .payment-container .totals-section .seperator-y { display: none; } }
+			/* Receipt buttons styling */
+			.email-btn { background: var(--blue-600,rgb(17, 70, 128)) !important; color: white !important; border: none !important; border-radius: var(--border-radius-md, 6px) !important; padding: 8px 16px !important; font-weight: 500 !important; transition: all 0.2s ease !important; }
+			.email-btn:hover { background: var(--blue-700,rgb(17, 70, 128)) !important; transform: translateY(-1px) !important; box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3) !important; }
+			.email-btn:active { transform: translateY(0) !important; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important; }
+			.print-btn { background: var(--green-600,rgb(210, 83, 47)) !important; color: white !important; border: none !important; border-radius: var(--border-radius-md, 6px) !important; padding: 8px 16px !important; font-weight: 500 !important; transition: all 0.2s ease !important; }
+			.print-btn:hover { background: var(--green-700,rgb(210, 83, 47)) !important; transform: translateY(-1px) !important; box-shadow: 0 4px 8px rgba(22, 163, 74, 0.3) !important; }
+			.print-btn:active { transform: translateY(0) !important; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2) !important; }
 			.customer-cart-container .cart-totals-section { position: sticky; bottom: 0; background: var(--bg-color); z-index: 1; }
 			.items-selector .filter-section { display: flex !important; flex-wrap: wrap !important; gap: 8px; }
 			.items-selector .view-selected-wrapper { flex: 0 0 100% !important; width: 100% !important; min-width: 100% !important; display: flex; align-items: center; margin-top: 8px; order: 99; }
@@ -788,16 +795,18 @@
 					// Submit without confirmation
 					frm.save('Submit', (r) => {
 						if (!r || r.exc) return;
+						// Play submit sound on successful completion
+						frappe.utils.play_sound('submit');
 						try {
 							ctrl.toggle_components(false);
 							ctrl.order_summary.toggle_component(true);
 							ctrl.order_summary.load_summary_of(frm.doc, true);
 						} catch (err) { /* no-op */ }
-						frappe.show_alert({
-							indicator: 'green',
-							message: frappe._('POS invoice {0} created successfully').replace('{0}', (r.doc && r.doc.name) || frm.doc.name || '')
-						});
-					});
+						// frappe.show_alert({
+						// 	indicator: 'green',
+						// 	message: frappe._('Order {0} created successfully').replace('{0}', (r.doc && r.doc.name) || frm.doc.name || '')
+						// })
+					})
 				}, true);
 				handlerAttached = true;
 			};
