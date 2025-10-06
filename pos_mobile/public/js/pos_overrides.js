@@ -178,7 +178,7 @@
 				body.pos-mobile-active .page-head .page-actions { display: flex !important; flex-wrap: wrap !important; align-items: center !important; justify-content: flex-end !important; gap: 6px !important; padding-right: 8px !important; max-width: 100% !important; }
 				body.pos-mobile-active .page-head .page-actions > * { flex: 0 0 auto !important; }
 				body.pos-mobile-active .page-head .page-actions .btn { white-space: nowrap !important; padding: 4px 10px !important; font-size: 12px !important; line-height: 1.2 !important; }
-				body.pos-mobile-active .page-head .page-actions .primary-action { display: none !important; }
+				body.pos-mobile-active .page-head .page-actions .primary-action { display: inline-flex !important; }
 			}
 			/* Mobile responsive CSS for New Invoice button */
 			@media screen and (max-width: 620px) {
