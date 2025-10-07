@@ -57,6 +57,15 @@
 		}
 	};
 
+	// Unified mobile detection
+	function isMobile() {
+		try {
+			if (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) return true;
+			if (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches) return true;
+		} catch (e) {}
+		return false;
+	}
+
 	// Enhanced smooth scroll helper
 	function strongScrollIntoView(element) {
 		return safeExecute(() => {
@@ -79,6 +88,25 @@
 				setTimeout(doScroll, CONFIG.TIMING.SCROLL_DELAY);
 			}
 		}, 'strongScrollIntoView');
+	}
+
+	// Lightweight debounce utility to reduce resize/event thrash
+	function debounce(fn, wait) {
+		let t;
+		return function debounced() {
+			const ctx = this, args = arguments;
+			clearTimeout(t);
+			t = setTimeout(() => fn.apply(ctx, args), wait);
+		};
+	}
+
+	// Safe data-attribute reader (avoids deprecated unescape and normalizes to string)
+	function readDataAttr(element, attributeName) {
+		return safeExecute(() => {
+			if (!element || typeof element.getAttribute !== 'function') return '';
+			const value = element.getAttribute(attributeName);
+			return typeof value === 'string' ? value : '';
+		}, 'readDataAttr', '');
 	}
 
 	// Wait for POS to be ready with improved retry logic
@@ -374,8 +402,7 @@
 	// Add Item Cart button with scrolling
 	function addViewSelectedItemsButton() {
 		return safeExecute(() => {
-			const onMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-			if (!onMobile) return;
+			if (!isMobile()) return;
 			const filter = document.querySelector('.items-selector .filter-section');
 			const cartContainer = document.querySelector('.customer-cart-container');
 			if (!filter || !cartContainer) return;
@@ -409,8 +436,7 @@
 
 			const updateBtnVisibility = () => {
 				safeExecute(() => {
-					const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-					if (isMobile) {
+					if (isMobile()) {
 						btn.style.display = 'flex';
 						btn.style.alignItems = 'center';
 						btn.style.justifyContent = 'center';
@@ -420,7 +446,7 @@
 				}, 'updateBtnVisibility');
 			};
 			updateBtnVisibility();
-			window.addEventListener('resize', updateBtnVisibility, { passive: true });
+			window.addEventListener('resize', debounce(updateBtnVisibility, 150), { passive: true });
 
 			btn.addEventListener('click', () => strongScrollIntoView(cartContainer));
 		}, 'addViewSelectedItemsButton');
@@ -465,7 +491,7 @@
 				const filter = document.querySelector('.items-selector .filter-section');
 				if (!filter) return false;
 				const hasBtn = filter.querySelector('.selected-items-btn');
-				const onMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+				const onMobile = isMobile();
 				if (!onMobile) {
 					if (hasBtn) {
 						const wrapper = hasBtn.closest('.view-selected-wrapper');
@@ -542,8 +568,7 @@
 							}
 							
 							// Only show this button on mobile screens
-							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-							if (!isMobile) return;
+							if (!isMobile()) return;
 							
 							// Create cart button
 							const cartBtn = $('<button class="item-cart-btn">');
@@ -763,8 +788,8 @@
 						const items = doc.items || [];
 						const tileList = document.querySelectorAll('.items-selector .item-wrapper');
 						tileList.forEach((tile) => {
-							const code = unescape(tile.getAttribute('data-item-code') || '');
-							const uom = unescape(tile.getAttribute('data-uom') || '');
+							const code = readDataAttr(tile, 'data-item-code');
+							const uom = readDataAttr(tile, 'data-uom');
 							const qty = items.filter((i) => i.item_code === code && (!uom || i.uom === uom)).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
 							let badge = tile.querySelector('.cart-badge');
 							if (!badge) {
@@ -816,7 +841,7 @@
 					this.$invoices_container.on('click', '.invoice-wrapper', function() {
 						const invoice_clicked = $(this);
 						const invoice_doctype = invoice_clicked.attr('data-invoice-doctype');
-						const invoice_name = unescape(invoice_clicked.attr('data-invoice-name'));
+						const invoice_name = readDataAttr(invoice_clicked.get(0), 'data-invoice-name');
 
 						$('.invoice-wrapper').removeClass('invoice-selected');
 						invoice_clicked.addClass('invoice-selected');
@@ -863,8 +888,7 @@
 
 		// Mobile: tap on quantity in cart increments qty without opening item details
 		safeExecute(() => {
-			const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-			if (!isMobile) return;
+			if (!isMobile()) return;
 			
 			const container = document.querySelector('.customer-cart-container');
 			if (!container) return;
@@ -879,7 +903,7 @@
 				const wrapper = qtyEl.closest('.cart-item-wrapper');
 				if (!wrapper) return;
 				
-				const rowName = unescape(wrapper.getAttribute('data-row-name') || '');
+				const rowName = readDataAttr(wrapper, 'data-row-name');
 				const ctrl = window.cur_pos;
 				const frm = ctrl && ctrl.frm;
 				if (!frm || !rowName) return;
