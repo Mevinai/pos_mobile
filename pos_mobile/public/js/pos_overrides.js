@@ -37,7 +37,13 @@
 		BREAKPOINTS: {
 			MOBILE: 480,
 			TABLET: 768,
-			DESKTOP: 901
+			DESKTOP: 901,
+			XS: 0,
+			SM: 576,
+			MD: 768,
+			LG: 992,
+			XL: 1200,
+			XXL: 1400
 		}
 	};
 
@@ -95,6 +101,85 @@
 		const style = document.createElement('style');
 		style.id = id;
 		style.textContent = `
+			/* Typography and spacing */
+			.point-of-sale-app { --pos-font-size: 14px; --pos-line-height: 1.35; }
+			.point-of-sale-app, .point-of-sale-app * { font-size: var(--pos-font-size); line-height: var(--pos-line-height); }
+			.point-of-sale-app h1, .point-of-sale-app h2, .point-of-sale-app h3 { letter-spacing: -0.01em; }
+			.point-of-sale-app .section-head, .point-of-sale-app .grid-heading { font-weight: 600; }
+			.point-of-sale-app .container.page-body { gap: 12px; }
+
+			/* Buttons palette */
+			.point-of-sale-app .btn, .point-of-sale-app .btn-primary { border-radius: var(--border-radius-md); font-weight: 600; }
+			.point-of-sale-app .btn-primary { background: var(--btn-primary); color: var(--neutral); border-color: var(--btn-primary); }
+			.point-of-sale-app .btn-primary:hover { filter: brightness(0.96); transform: translateY(-1px); }
+			.point-of-sale-app .btn-primary:active { transform: translateY(0); }
+
+			/* Cards polish */
+			.items-selector .item-wrapper { background: var(--fg-color); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden; transition: box-shadow .2s ease, transform .2s ease; }
+			.items-selector .item-wrapper:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-1px); }
+			.payment-container .mode-of-payment { transition: box-shadow .2s ease, transform .2s ease; }
+			.payment-container .mode-of-payment:hover { transform: translateY(-1px); }
+
+			/* Focus visible */
+			.point-of-sale-app :focus-visible { outline: 2px solid var(--blue-500, #3b82f6); outline-offset: 2px; border-radius: 6px; }
+
+			/* Empty states */
+			.point-of-sale-app .empty-hint { color: var(--text-muted); font-size: 13px; padding: 12px; text-align: center; }
+
+			/* Light animations */
+			.point-of-sale-app .fade-in { animation: posFadeIn .2s ease-out; }
+			@keyframes posFadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+			/*
+			Responsive layout rules for POS across standard breakpoints
+			- xs (< ${CONFIG.BREAKPOINTS.SM}px): stacked, compact
+			- sm (>= ${CONFIG.BREAKPOINTS.SM}px): possible two-columns
+			- md (>= ${CONFIG.BREAKPOINTS.MD}px): split layout with sidebars
+			- lg (>= ${CONFIG.BREAKPOINTS.LG}px): multi-column comfortable spacing
+			- xl (>= ${CONFIG.BREAKPOINTS.XL}px): max content width tuning
+			- xxl (>= ${CONFIG.BREAKPOINTS.XXL}px): centered wide layout
+			*/
+			/* xs: default (stacked, compact) */
+			.point-of-sale-app { --pos-max-width: 100%; }
+			.point-of-sale-app .container.page-body { padding: 8px 8px; }
+			.items-selector .items-container { grid-template-columns: repeat(2, minmax(0,1fr)); }
+			.payment-container .payment-modes { grid-template-columns: 1fr; }
+
+			/* sm: >=576px */
+			@media (min-width: ${CONFIG.BREAKPOINTS.SM}px) {
+				.items-selector .items-container { grid-template-columns: repeat(3, minmax(0,1fr)); }
+				.point-of-sale-app .container.page-body { padding: 12px 12px; }
+			}
+
+			/* md: >=768px */
+			@media (min-width: ${CONFIG.BREAKPOINTS.MD}px) {
+				.items-selector .items-container { grid-template-columns: repeat(4, minmax(0,1fr)); }
+				.point-of-sale-app .container.page-body { padding: 16px 16px; }
+				.point-of-sale-app .layout-main-section { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; align-items: start; }
+			}
+
+			/* lg: >=992px */
+			@media (min-width: ${CONFIG.BREAKPOINTS.LG}px) {
+				.items-selector .items-container { grid-template-columns: repeat(5, minmax(0,1fr)); }
+				.point-of-sale-app .container.page-body { padding: 20px 20px; }
+				.point-of-sale-app .layout-main-section { grid-template-columns: 1.2fr 0.8fr; gap: 20px; }
+
+				/* comfortable tap targets */
+				.payment-container .number-pad .numpad-btn { height: 60px; font-size: 18px; }
+			}
+
+			/* xl: >=1200px */
+			@media (min-width: ${CONFIG.BREAKPOINTS.XL}px) {
+				.point-of-sale-app { --pos-max-width: 1140px; margin: 0 auto; }
+				.items-selector .items-container { grid-template-columns: repeat(6, minmax(0,1fr)); }
+				.point-of-sale-app .layout-main-section { grid-template-columns: 1.25fr 0.75fr; gap: 24px; }
+			}
+
+			/* xxl: >=1400px */
+			@media (min-width: ${CONFIG.BREAKPOINTS.XXL}px) {
+				.point-of-sale-app { --pos-max-width: 1320px; margin-left: auto; margin-right: auto; }
+				.items-selector .items-container { grid-template-columns: repeat(7, minmax(0,1fr)); }
+				.point-of-sale-app .layout-main-section { grid-template-columns: 1.3fr 0.7fr; gap: 28px; }
+			}
 			/* Modernize payment cards and totals on both desktop and mobile */
 			.payment-container .submit-order-btn { position: static; width: 100%; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--btn-primary); color: var(--neutral); border-radius: var(--border-radius-md); margin-top: var(--padding-sm); }
 			.payment-container .submit-order-btn:active { transform: translateY(1px); filter: brightness(.95); }
@@ -289,6 +374,8 @@
 	// Add Item Cart button with scrolling
 	function addViewSelectedItemsButton() {
 		return safeExecute(() => {
+			const onMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+			if (!onMobile) return;
 			const filter = document.querySelector('.items-selector .filter-section');
 			const cartContainer = document.querySelector('.customer-cart-container');
 			if (!filter || !cartContainer) return;
@@ -370,6 +457,39 @@
 				tries++;
 			}, CONFIG.TIMING.RETRY_DELAY);
 		}, 'retryItemSelector');
+
+		// Observe DOM for late renders and ensure Item Cart button exists
+		safeExecute(() => {
+			let ensured = false;
+			const ensureBtn = () => {
+				const filter = document.querySelector('.items-selector .filter-section');
+				if (!filter) return false;
+				const hasBtn = filter.querySelector('.selected-items-btn');
+				const onMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+				if (!onMobile) {
+					if (hasBtn) {
+						const wrapper = hasBtn.closest('.view-selected-wrapper');
+						if (wrapper && wrapper.parentNode) { wrapper.parentNode.removeChild(wrapper); }
+					}
+					return true;
+				}
+				if (!hasBtn) {
+					addViewSelectedItemsButton();
+					return false;
+				}
+				return true;
+			};
+			if (ensureBtn()) return;
+			const mo = new MutationObserver(() => {
+				try {
+					if (document.hidden) return;
+					if (ensureBtn()) { mo.disconnect(); ensured = true; }
+				} catch (e) {}
+			});
+			mo.observe(document.body, { childList: true, subtree: true });
+			// safety timeout to disconnect after some time
+			setTimeout(() => { try { if (!ensured) mo.disconnect(); } catch (e) {} }, 10000);
+		}, 'observeItemCartButton');
 
 		// Patch POS Controller
 		safeExecute(() => {
@@ -541,6 +661,22 @@
 					if (hasDetails) {
 						const itemsSelector = document.querySelector('.items-selector');
 						itemsSelector && strongScrollIntoView(itemsSelector);
+						// Ensure Item Cart button exists and is visible on mobile only
+						try {
+							addViewSelectedItemsButton();
+							const filter = document.querySelector('.items-selector .filter-section');
+							const btn = filter && filter.querySelector('.selected-items-btn');
+							const onMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
+							if (btn) {
+								if (onMobile) {
+									btn.style.display = 'flex';
+									btn.style.alignItems = 'center';
+									btn.style.justifyContent = 'center';
+								} else {
+									btn.style.display = 'none';
+								}
+							}
+						} catch (e) {}
 					}
 				});
 				mo.observe(customerSection, { childList: true, subtree: true });
