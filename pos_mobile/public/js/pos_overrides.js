@@ -5,16 +5,18 @@
 
 (function () {
 	console.log('[POS Mobile] Starting initialization...');
-	
+
 	if (!window.frappe) {
 		console.error('[POS Mobile] ERROR: Frappe framework not found!');
 		return;
 	}
-	
+
 	console.log('[POS Mobile] Frappe framework detected');
 
 	// Configuration and constants
 	const CONFIG = {
+		// enable lightweight debug logs for lifecycle events (timers/cleanup)
+		DEBUG: false,
 		TIMING: {
 			POLLING_INTERVAL: 100,
 			RETRY_ATTEMPTS: 20,
@@ -31,8 +33,7 @@
 			SELECTED_ITEMS_BTN: '.selected-items-btn',
 			VIEW_SELECTED_WRAPPER: '.view-selected-wrapper',
 			MODE_OF_PAYMENT: '.mode-of-payment',
-			TOTALS_SECTION: '.totals-section',
-			CART_BADGE: '.cart-badge'
+			TOTALS_SECTION: '.totals-section'
 		},
 		BREAKPOINTS: {
 			MOBILE: 480,
@@ -44,6 +45,20 @@
 			LG: 992,
 			XL: 1200,
 			XXL: 1400
+		},
+		STOCK: {
+			REFRESH_MS: 30000,
+			BATCH_SIZE: 30
+		},
+		QUEUE: {
+			FLUSH_INTERVAL_MS: 15000,
+			BACKOFF_BASE_MS: 3000,
+			BACKOFF_MAX_MS: 60000
+		},
+		SYNC: {
+			REMOTE_DB_URL: null, /* e.g., 'https://user:pass@local-couchdb:5984/pos_sync' */
+			REMOTE_METHOD: 'pos_mobile.pos_mobile.api.pos_sync.submit_sale',
+			REMOTE_UPDATE_METHOD: 'pos_mobile.pos_mobile.api.pos_sync.mark_paid'
 		}
 	};
 
@@ -62,7 +77,7 @@
 		try {
 			if (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) return true;
 			if (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches) return true;
-		} catch (e) {}
+		} catch (e) { }
 		return false;
 	}
 
@@ -100,6 +115,57 @@
 		};
 	}
 
+	// Minimal IndexedDB helpers for POS caches
+	const IDB = {
+		_openPromises: {},
+		open(dbName = 'pos_mobile', version = 1) {
+			const key = `${dbName}::${version}`;
+			if (this._openPromises[key]) return this._openPromises[key];
+			this._openPromises[key] = new Promise((resolve, reject) => {
+				const req = indexedDB.open(dbName, version);
+				req.onupgradeneeded = function (e) {
+					const db = req.result;
+					if (!db.objectStoreNames.contains('stock')) {
+						const s = db.createObjectStore('stock', { keyPath: 'item_code' });
+						s.createIndex('updated_at', 'updated_at');
+					}
+					if (!db.objectStoreNames.contains('orders')) {
+						db.createObjectStore('orders', { keyPath: 'id', autoIncrement: true });
+					}
+					if (!db.objectStoreNames.contains('meta')) {
+						db.createObjectStore('meta', { keyPath: 'key' });
+					}
+				};
+				req.onsuccess = () => resolve(req.result);
+				req.onerror = () => reject(req.error);
+			}).catch(err => { delete this._openPromises[key]; throw err; });
+			return this._openPromises[key];
+		},
+		put(store, value) {
+			return this.open().then(db => new Promise((resolve, reject) => {
+				const tx = db.transaction(store, 'readwrite');
+				tx.objectStore(store).put(value);
+				tx.oncomplete = () => resolve(true);
+				tx.onerror = () => reject(tx.error);
+			}));
+		},
+		get(store, key) {
+			return this.open().then(db => new Promise((resolve, reject) => {
+				const tx = db.transaction(store, 'readonly');
+				const req = tx.objectStore(store).get(key);
+				req.onsuccess = () => resolve(req.result || null);
+				req.onerror = () => reject(req.error);
+			}));
+		},
+		bulkGet(store, keys) {
+			return Promise.all(keys.map(k => this.get(store, k)));
+		}
+	};
+
+	// track global intervals/observers for cleanup
+	const GLOBAL_INTERVALS = [];
+	const GLOBAL_OBSERVERS = [];
+
 	// Safe data-attribute reader (avoids deprecated unescape and normalizes to string)
 	function readDataAttr(element, attributeName) {
 		return safeExecute(() => {
@@ -109,11 +175,18 @@
 		}, 'readDataAttr', '');
 	}
 
+	// Helper to safely get current form (centralized)
+	function getCurFrm() {
+		try {
+			return (window.cur_pos && window.cur_pos.frm) || (typeof locals !== 'undefined' && locals && locals.cur_frm) || null;
+		} catch (e) { return null; }
+	}
+
 	// Wait for POS to be ready with improved retry logic
 	function onPOSReady(cb) {
 		const check = setInterval(() => {
 			const container = document.querySelector(CONFIG.CLASSES.POS_CONTAINER) ||
-							document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
+				document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
 			if (container) {
 				clearInterval(check);
 				cb();
@@ -254,8 +327,14 @@
 			.items-selector .selected-items-btn { width: 100% !important; height: 36px; padding: 0 12px; font-size: 16px; border: none; border-radius: var(--border-radius-md); background: #000000ff; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); animation: posBtnPulse 2s ease-out infinite; }
 			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) { .items-selector .selected-items-btn { display: flex !important; justify-content: center; align-items: center; } }
 			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) { .items-selector .selected-items-btn { display: none; } }
-			.cart-badge { position: absolute; top: 6px; left: 6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--btn-primary); color: var(--neutral); font-size: 12px; line-height: 20px; text-align: center; padding: 0 6px; display: none; z-index: 10; }
+
+			/* Top-left per-item count button (visible on all screen sizes) */
+			.item-count-btn { position: absolute; top: 6px; left: 6px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--btn-primary); color: var(--neutral); font-size: 12px; line-height: 20px; text-align: center; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; z-index: 10; cursor: pointer; user-select: none; }
+			.item-count-btn[aria-hidden="true"] { opacity: 0.6; }
 			.item-wrapper { position: relative; }
+			/* Show stock tile controls only on desktop */
+			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) { .items-selector .stock-container { display: none !important; } }
+			@media (min-width: ${CONFIG.BREAKPOINTS.TABLET + 1}px) { .items-selector .stock-container { display: flex !important; } }
 			/* Item Details Cart Button - Mobile Only */
 			@media (max-width: ${CONFIG.BREAKPOINTS.TABLET}px) {
 				.item-details-container .item-cart-btn { position: sticky; bottom: 0; width: 100%; height: 48px; margin-top: 16px; background: var(--btn-primary); color: var(--neutral); border: none; border-radius: var(--border-radius-md); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10; }
@@ -373,6 +452,29 @@
 	// Accessibility + cart button count
 	function enhanceAccessibility() {
 		return safeExecute(() => {
+			// Offline badge (top-right)
+			(function injectOfflineBadge() {
+				const id = 'pos-offline-badge';
+				if (document.getElementById(id)) return;
+				const badge = document.createElement('div');
+				badge.id = id;
+				badge.setAttribute('role', 'status');
+				badge.setAttribute('aria-live', 'polite');
+				badge.style.cssText = 'display:none;position:fixed;top:10px;right:10px;z-index:3000;background:#dc2626;color:#fff;padding:6px 10px;border-radius:9999px;font-weight:600;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+				badge.textContent = frappe._('Offline');
+				document.body.appendChild(badge);
+
+				const update = () => {
+					if (navigator.onLine) {
+						badge.style.display = 'none';
+					} else {
+						badge.style.display = 'inline-flex';
+					}
+				};
+				window.addEventListener('online', update, { passive: true });
+				window.addEventListener('offline', update, { passive: true });
+				update();
+			})();
 			const totals = document.querySelector('.payment-container .totals');
 			if (totals) {
 				totals.setAttribute('role', 'region');
@@ -456,23 +558,23 @@
 	// Main init
 	onPOSReady(() => {
 		console.log('[POS Mobile] POS container detected - initializing features...');
-		
+
 		// mark body so header tweaks are scoped to POS only
-		try { document.body.classList.add('pos-mobile-active'); } catch (e) {}
+		try { document.body.classList.add('pos-mobile-active'); } catch (e) { }
 		injectStylesOnce();
 		console.log('[POS Mobile] Styles injected');
-		
+
 		enhanceAccessibility();
 		console.log('[POS Mobile] Accessibility enhanced');
-		
+
 		addViewSelectedItemsButton();
 		console.log('[POS Mobile] Item cart button added');
 
 		// Ensure button exists after delayed renders
-			safeExecute(() => {
+		safeExecute(() => {
 			let tries = 0;
 			const iv = setInterval(() => {
-					if (document.hidden) return;
+				if (document.hidden) return;
 				const filter = document.querySelector('.items-selector .filter-section');
 				const hasBtn = filter && filter.querySelector('.selected-items-btn');
 				if (hasBtn || tries > 15) {
@@ -482,7 +584,50 @@
 				addViewSelectedItemsButton();
 				tries++;
 			}, CONFIG.TIMING.RETRY_DELAY);
+			// track interval for cleanup
+			GLOBAL_INTERVALS.push(iv);
 		}, 'retryItemSelector');
+
+		// Online stock refresher: periodically cache visible item stock
+		safeExecute(() => {
+			let lastRun = 0;
+			const fetchAndCacheStock = () => {
+				if (!navigator.onLine) return;
+				const now = Date.now();
+				if (now - lastRun < CONFIG.STOCK.REFRESH_MS) return;
+				lastRun = now;
+				const tiles = Array.from(document.querySelectorAll('.items-selector .item-wrapper'));
+				const codes = tiles.slice(0, CONFIG.STOCK.BATCH_SIZE).map(t => readDataAttr(t, 'data-item-code')).filter(Boolean);
+				if (!codes.length) return;
+				try {
+					frappe.call({
+						method: 'pos_mobile.pos_mobile.api.pos_stock.get_available_qty',
+						args: () => {
+							const ctrl = window.cur_pos;
+							const frm = ctrl && ctrl.frm;
+							const profile = frm && frm.doc && frm.doc.pos_profile;
+							return { item_codes: codes, pos_profile: profile || undefined };
+						},
+						freeze: false
+					}).then(r => {
+						const data = r && r.message ? r.message : {};
+						Object.keys(data).forEach(item_code => {
+							IDB.put('stock', {
+								item_code,
+								actual_qty: Number(data[item_code] && data[item_code].actual_qty) || 0,
+								updated_at: Date.now()
+							}).catch(() => { });
+						});
+					}).catch(() => { });
+				} catch (e) { }
+			};
+			// run on load and on interval
+			const stockInterval = setInterval(() => { if (document.hidden) return; fetchAndCacheStock(); }, 5000);
+			window.POSMobile.stockRefreshInterval = stockInterval;
+			GLOBAL_INTERVALS.push(stockInterval);
+			window.addEventListener('online', fetchAndCacheStock, { passive: true });
+			fetchAndCacheStock();
+		}, 'onlineStockRefresh');
 
 		// Observe DOM for late renders and ensure Item Cart button exists
 		safeExecute(() => {
@@ -510,11 +655,11 @@
 				try {
 					if (document.hidden) return;
 					if (ensureBtn()) { mo.disconnect(); ensured = true; }
-				} catch (e) {}
+				} catch (e) { }
 			});
 			mo.observe(document.body, { childList: true, subtree: true });
 			// safety timeout to disconnect after some time
-			setTimeout(() => { try { if (!ensured) mo.disconnect(); } catch (e) {} }, 10000);
+			setTimeout(() => { try { if (!ensured) mo.disconnect(); } catch (e) { } }, 10000);
 		}, 'observeItemCartButton');
 
 		// Patch POS Controller
@@ -554,26 +699,26 @@
 					orig_toggle && orig_toggle.call(this, show);
 					if (show) {
 						safeExecute(() => { this.$component && strongScrollIntoView(this.$component.get(0)); }, 'itemDetailsScroll');
-						
+
 						// Add cart button to item details (Mobile only)
 						safeExecute(() => {
 							const self = this;
 							if (!this.$component) return;
-							
+
 							// Always remove existing cart button first
 							this.$component.find('.item-cart-btn').remove();
 							if (this.__posMobileCartCountInterval) {
 								clearInterval(this.__posMobileCartCountInterval);
 								this.__posMobileCartCountInterval = null;
 							}
-							
+
 							// Only show this button on mobile screens
 							if (!isMobile()) return;
-							
+
 							// Create cart button
 							const cartBtn = $('<button class="item-cart-btn">');
 							cartBtn.html(`${frappe._('Item Cart')} <span class="cart-count">0</span>`);
-							
+
 							// Update cart count
 							const updateCartCount = () => {
 								const frm = cur_pos && cur_pos.frm ? cur_pos.frm : (locals && locals.cur_frm ? locals.cur_frm : null);
@@ -582,19 +727,20 @@
 								cartBtn.find('.cart-count').text(total_qty);
 							};
 							updateCartCount();
-							
+
 							// Add click handler to return to checkout
 							cartBtn.on('click', () => {
 								self.toggle_component(false);
 							});
-							
+
 							// Append to component
 							this.$component.append(cartBtn);
-							
+
 							// Update count periodically
 							this.__posMobileCartCountInterval = setInterval(updateCartCount, 500);
+							GLOBAL_INTERVALS.push(this.__posMobileCartCountInterval);
 						}, 'addItemDetailsCartButton');
-						
+
 						// attach outside-click and input blur/change to finish edit and return
 						safeExecute(() => {
 							const self = this;
@@ -629,13 +775,13 @@
 						safeExecute(() => {
 							// Remove cart button
 							this.$component && this.$component.find('.item-cart-btn').remove();
-							
+
 							// Clear cart count interval
 							if (this.__posMobileCartCountInterval) {
 								clearInterval(this.__posMobileCartCountInterval);
 								this.__posMobileCartCountInterval = null;
 							}
-							
+
 							// Detach listeners
 							if (this.__posMobileOutsideClickHandler) {
 								document.removeEventListener('mousedown', this.__posMobileOutsideClickHandler, true);
@@ -654,22 +800,22 @@
 							const ctrl = window.cur_pos;
 							const payment = ctrl && ctrl.payment;
 							const isMobile = (erpnext?.PointOfSale?.Utils?.isMobile && erpnext.PointOfSale.Utils.isMobile()) || (window.matchMedia && window.matchMedia(`(max-width: ${CONFIG.BREAKPOINTS.TABLET}px)`).matches);
-							
+
 							if (payment && payment.__posMobileCanReturnToCheckout && isMobile) {
 								payment.__posMobileCanReturnToCheckout = false;
 								try {
 									// Show cart (checkout) section, hide payment section
 									ctrl.cart && ctrl.cart.toggle_component(true);
 									payment.toggle_component && payment.toggle_component(false);
-									
+
 									// Scroll to cart/checkout section
 									const cartEl = ctrl.cart && ctrl.cart.$component && ctrl.cart.$component.get(0);
 									cartEl && strongScrollIntoView(cartEl);
-									
+
 									// Show numpad for quantity editing
 									ctrl.cart && ctrl.cart.toggle_numpad && ctrl.cart.toggle_numpad(true);
 									ctrl.cart && ctrl.cart.toggle_numpad_field_edit && ctrl.cart.toggle_numpad_field_edit('qty');
-								} catch (e) {}
+								} catch (e) { }
 							}
 						}, 'autoReturnToCheckout');
 					}
@@ -701,7 +847,7 @@
 									btn.style.display = 'none';
 								}
 							}
-						} catch (e) {}
+						} catch (e) { }
 					}
 				});
 				mo.observe(customerSection, { childList: true, subtree: true });
@@ -777,7 +923,7 @@
 			}
 		}, 'patchPayment');
 
-		// Provide update_cart_badges + periodic sync
+		// // Provide update_cart_badges + periodic sync
 		safeExecute(() => {
 			const IS = erpnext?.PointOfSale?.ItemSelector;
 			if (IS && !IS.prototype.update_cart_badges) {
@@ -791,20 +937,65 @@
 							const code = readDataAttr(tile, 'data-item-code');
 							const uom = readDataAttr(tile, 'data-uom');
 							const qty = items.filter((i) => i.item_code === code && (!uom || i.uom === uom)).reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
-							let badge = tile.querySelector('.cart-badge');
-							if (!badge) {
-								badge = document.createElement('div');
-								badge.className = 'cart-badge';
-								badge.style.cssText = 'position:absolute;top:6px;left:6px;min-width:20px;height:20px;border-radius:10px;background:var(--btn-primary);color:var(--neutral);font-size:12px;line-height:20px;text-align:center;padding:0 6px;display:none;';
-								tile.style.position = 'relative';
-								tile.appendChild(badge);
+
+							// ensure tile cache container
+							tile.__posRefs = tile.__posRefs || {};
+
+							// Count button caching
+							let countBtn = tile.__posRefs.countBtn;
+							if (!countBtn) {
+								countBtn = tile.querySelector('.item-count-btn');
+								if (!countBtn) {
+									countBtn = document.createElement('button');
+									countBtn.className = 'item-count-btn';
+									countBtn.setAttribute('type', 'button');
+									countBtn.setAttribute('aria-label', frappe._('Item quantity'));
+									countBtn.addEventListener('keydown', (ev) => {
+										if (ev.key === 'Enter' || ev.key === ' ') {
+											ev.preventDefault(); ev.stopPropagation();
+											const cart = document.querySelector('.customer-cart-container');
+											cart && strongScrollIntoView(cart);
+										}
+									});
+									countBtn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); const cart = document.querySelector('.customer-cart-container'); cart && strongScrollIntoView(cart); }, { passive: true });
+									tile.appendChild(countBtn);
+								}
+								tile.__posRefs.countBtn = countBtn;
 							}
+
+							// Stock container caching
+							let stockContainer = tile.__posRefs.stockContainer;
+							if (!stockContainer) {
+								stockContainer = tile.querySelector('.stock-container');
+								if (!stockContainer) {
+									stockContainer = document.createElement('div');
+									stockContainer.className = 'stock-container';
+									stockContainer.style.cssText = `position:absolute;bottom:6px;right:6px;display:flex;align-items:center;gap:6px;z-index:5;`;
+									tile.appendChild(stockContainer);
+								}
+								tile.__posRefs.stockContainer = stockContainer;
+							}
+
+							// update count button display
 							if (qty > 0) {
-								badge.textContent = qty;
-								badge.style.display = 'inline-block';
+								tile.__posRefs.countBtn.textContent = String(qty);
+								tile.__posRefs.countBtn.style.display = 'inline-flex';
+								tile.__posRefs.countBtn.setAttribute('aria-hidden', 'false');
 							} else {
-								badge.style.display = 'none';
+								tile.__posRefs.countBtn.textContent = '';
+								tile.__posRefs.countBtn.style.display = 'none';
+								tile.__posRefs.countBtn.setAttribute('aria-hidden', 'true');
 							}
+
+							// Render stock-value inside cached stock container
+							let label = tile.__posRefs.stockContainer.querySelector('.stock-value');
+							if (!label) {
+								label = document.createElement('div');
+								label.className = 'stock-value';
+								label.style.cssText = `min-width:28px;text-align:center;font-size:14px;color:#fff;background:rgba(0,0,0,0.5);border-radius:6px;padding:2px 6px;`;
+								tile.__posRefs.stockContainer.appendChild(label);
+							}
+							label.textContent = (typeof qty === 'number') ? qty : (qty || '+');
 						});
 
 						const btn = document.querySelector('.items-selector .selected-items-btn');
@@ -815,12 +1006,14 @@
 						}
 					}, 'updateCartBadges');
 				};
-				setInterval(() => {
+				const badgeInterval = setInterval(() => {
 					safeExecute(() => {
 						const selector = cur_pos?.item_selector;
 						selector && selector.update_cart_badges && selector.update_cart_badges();
 					}, 'badgeRefresh');
 				}, CONFIG.TIMING.POLLING_INTERVAL);
+				window.POSMobile.badgeRefreshInterval = badgeInterval;
+				GLOBAL_INTERVALS.push(badgeInterval);
 			}
 		}, 'patchItemSelector');
 
@@ -829,16 +1022,16 @@
 			if (erpnext?.PointOfSale?.PastOrderList && !erpnext.PointOfSale.PastOrderList.__posMobilePatched) {
 				erpnext.PointOfSale.PastOrderList.__posMobilePatched = true;
 				const POL = erpnext.PointOfSale.PastOrderList;
-				
+
 				const orig_bind_events = POL.prototype.bind_events;
-				POL.prototype.bind_events = function() {
+				POL.prototype.bind_events = function () {
 					// Call original bind_events first
 					orig_bind_events && orig_bind_events.call(this);
-					
+
 					// Override the click handler to add auto-scroll
 					const me = this;
 					this.$invoices_container.off('click', '.invoice-wrapper');
-					this.$invoices_container.on('click', '.invoice-wrapper', function() {
+					this.$invoices_container.on('click', '.invoice-wrapper', function () {
 						const invoice_clicked = $(this);
 						const invoice_doctype = invoice_clicked.attr('data-invoice-doctype');
 						const invoice_name = readDataAttr(invoice_clicked.get(0), 'data-invoice-name');
@@ -848,7 +1041,7 @@
 
 						// Call the original event handler
 						me.events.open_invoice_data(invoice_doctype, invoice_name);
-						
+
 						// Auto-scroll to order summary after a short delay
 						safeExecute(() => {
 							setTimeout(() => {
@@ -868,12 +1061,12 @@
 			if (erpnext?.PointOfSale?.PastOrderSummary && !erpnext.PointOfSale.PastOrderSummary.__posMobilePatched) {
 				erpnext.PointOfSale.PastOrderSummary.__posMobilePatched = true;
 				const POS = erpnext.PointOfSale.PastOrderSummary;
-				
+
 				const orig_load_summary = POS.prototype.load_summary_of;
-				POS.prototype.load_summary_of = function(doc, after_submission = false) {
+				POS.prototype.load_summary_of = function (doc, after_submission = false) {
 					// Call original method
 					orig_load_summary && orig_load_summary.call(this, doc, after_submission);
-					
+
 					// Auto-scroll to the summary component after it's loaded
 					safeExecute(() => {
 						setTimeout(() => {
@@ -889,44 +1082,76 @@
 		// Mobile: tap on quantity in cart increments qty without opening item details
 		safeExecute(() => {
 			if (!isMobile()) return;
-			
+
 			const container = document.querySelector('.customer-cart-container');
 			if (!container) return;
-			
+
 			container.addEventListener('click', function (e) {
 				const qtyEl = e.target && e.target.closest && e.target.closest('.item-qty');
 				if (!qtyEl) return;
-				
+
 				e.preventDefault();
 				e.stopPropagation();
-				
+
 				const wrapper = qtyEl.closest('.cart-item-wrapper');
 				if (!wrapper) return;
-				
+
 				const rowName = readDataAttr(wrapper, 'data-row-name');
 				const ctrl = window.cur_pos;
 				const frm = ctrl && ctrl.frm;
 				if (!frm || !rowName) return;
-				
+
 				const itemRow = (frm.doc.items || []).find(i => i.name === rowName);
 				if (!itemRow) return;
-				
+
 				const newQty = (parseFloat(itemRow.qty) || 0) + 1;
 				ctrl.on_cart_update({ field: 'qty', value: newQty, item: { name: rowName } }).then(() => {
-					try { 
-						ctrl.cart.toggle_numpad(true); 
-						ctrl.cart.toggle_numpad_field_edit('qty'); 
-					} catch (err) {}
+					try {
+						ctrl.cart.toggle_numpad(true);
+						ctrl.cart.toggle_numpad_field_edit('qty');
+					} catch (err) { }
 				});
 			}, true);
 		}, 'mobileQtyTapIncrement');
 
-		console.log('[POS Mobile] Patching components complete');
-		
-		// Intercept "Complete Order" button to force auto-submit without confirmation
-		console.log('[POS Mobile] Setting up Complete Order auto-confirmation...');
 		safeExecute(() => {
 			let handlerAttached = false;
+			let submitting = false;
+
+			function getOrAssignSaleId(frm) {
+				try {
+					if (!frm.doc.__pos_sale_id) {
+						if (window.POSPouch && typeof window.POSPouch.makeUUID === 'function') {
+							frm.doc.__pos_sale_id = 'sale:' + window.POSPouch.makeUUID();
+						} else {
+							frm.doc.__pos_sale_id = 'sale:' + Date.now() + ':' + Math.random().toString(16).slice(2);
+						}
+					}
+					return frm.doc.__pos_sale_id;
+				} catch (e) {
+					return 'sale:' + Date.now();
+				}
+			}
+
+			function ensurePaidViewDoc(source) {
+				try {
+					const d = JSON.parse(JSON.stringify(source || {}));
+					const total = Number(d.rounded_total || d.grand_total || 0) || 0;
+					d.status = 'Paid';
+					d.docstatus = 1;
+					d.paid_amount = total;
+					if (!Array.isArray(d.payments)) d.payments = [];
+					if (d.payments.length === 0) {
+						d.payments.push({ mode_of_payment: (d.payments && d.payments[0] && d.payments[0].mode_of_payment) || (d.default_mode_of_payment || 'Cash'), amount: total });
+					} else {
+						d.payments[0].amount = total;
+					}
+					return d;
+				} catch (e) {
+					return source;
+				}
+			}
+
 			const attach = () => {
 				if (handlerAttached) return;
 				const container = document.querySelector(CONFIG.CLASSES.PAYMENT_CONTAINER);
@@ -935,7 +1160,7 @@
 					return;
 				}
 				console.log('[POS Mobile] Complete Order handler attached');
-			document.addEventListener('click', function onClick(e) {
+				document.addEventListener('click', function onClick(e) {
 					const btn = e.target && (e.target.closest && e.target.closest('.payment-container .submit-order-btn'));
 					if (!btn) return;
 					// Stop the original handler (which triggers savesubmit confirmation)
@@ -952,21 +1177,58 @@
 						frappe.utils.play_sound('error');
 						return;
 					}
-					// Submit without confirmation
-					frm.save('Submit', (r) => {
-						if (!r || r.exc) return;
-						// Play submit sound on successful completion
-						frappe.utils.play_sound('submit');
+
+					if (submitting) return; // prevent double clicks
+					submitting = true;
+					try { btn.setAttribute('disabled', 'disabled'); btn.classList.add('disabled'); } catch (e) { }
+
+					const sale_id = getOrAssignSaleId(frm);
+					const showPaidSummary = (summaryDoc) => {
 						try {
 							ctrl.toggle_components(false);
 							ctrl.order_summary.toggle_component(true);
-							ctrl.order_summary.load_summary_of(frm.doc, true);
-						} catch (err) { /* no-op */ }
-						// frappe.show_alert({
-						// 	indicator: 'green',
-						// 	message: frappe._('Order {0} created successfully').replace('{0}', (r.doc && r.doc.name) || frm.doc.name || '')
-						// })
-					})
+							ctrl.order_summary.load_summary_of(summaryDoc, true);
+							const el = ctrl.order_summary.$component && ctrl.order_summary.$component.get(0);
+							el && strongScrollIntoView(el);
+						} catch (err) { }
+					};
+					const finalize = () => { submitting = false; try { btn.removeAttribute('disabled'); btn.classList.remove('disabled'); } catch (e) { } };
+
+					if (!navigator.onLine) {
+						// Offline: queue and immediately show Paid summary view
+						const viewDoc = ensurePaidViewDoc(doc);
+						const afterQueue = () => {
+							frappe.show_alert({ message: frappe._('Order saved offline. Will sync when online.'), indicator: 'blue' });
+							frappe.utils.play_sound('submit');
+							showPaidSummary(viewDoc);
+							finalize();
+						};
+						if (window.POSPouch && typeof window.POSPouch.writeSaleDoc === 'function') {
+							window.POSPouch.writeSaleDoc(Object.assign({}, doc, { __sale_id: sale_id }))
+								.then(afterQueue)
+								.catch(() => {
+									OrderQueue.enqueue(Object.assign({}, doc, { __sale_id: sale_id })).then(afterQueue);
+								});
+						} else {
+							OrderQueue.enqueue(Object.assign({}, doc, { __sale_id: sale_id })).then(afterQueue);
+						}
+						return;
+					}
+
+					// Online: submit current doc (do not create a new one)
+					frm.save('Submit', () => {
+						try { frappe.utils.play_sound('submit'); showPaidSummary(frm.doc); } catch (err) { }
+						finalize();
+					});
+					return;
+
+					// Fallback: core submit
+					frm.save('Submit', (r) => {
+						if (!r || r.exc) { finalize(); return; }
+						frappe.utils.play_sound('submit');
+						try { showPaidSummary(frm.doc); } catch (err) { }
+						finalize();
+					});
 				}, true);
 				handlerAttached = true;
 			};
@@ -981,7 +1243,251 @@
 		config: CONFIG,
 		scrollToView: strongScrollIntoView
 	};
-	
+
+	// Cleanup handler: clears tracked intervals and disconnects observers on unload
+	function posMobileCleanup() {
+		safeExecute(() => {
+			try {
+				if (CONFIG.DEBUG) console.info('[POS Mobile] Running posMobileCleanup');
+				// Clear tracked intervals
+				GLOBAL_INTERVALS.forEach((id) => {
+					try { clearInterval(id); if (CONFIG.DEBUG) console.debug('[POS Mobile] cleared interval', id); } catch (e) { }
+				});
+				GLOBAL_INTERVALS.length = 0;
+
+				// Disconnect observers
+				GLOBAL_OBSERVERS.forEach((ob) => {
+					try { if (ob && typeof ob.disconnect === 'function') { ob.disconnect(); if (CONFIG.DEBUG) console.debug('[POS Mobile] disconnected observer', ob); } } catch (e) { }
+				});
+				GLOBAL_OBSERVERS.length = 0;
+
+				// Best-effort: clear known instance-scoped intervals
+				try {
+					const ctrl = window.cur_pos;
+					if (ctrl) {
+						if (ctrl._pos_mobile_refresh) { try { clearInterval(ctrl._pos_mobile_refresh); } catch (e) { } ctrl._pos_mobile_refresh = null; if (CONFIG.DEBUG) console.debug('[POS Mobile] cleared ctrl._pos_mobile_refresh'); }
+						if (ctrl.item_selector && ctrl.item_selector.__posMobileBadgeInterval) { try { clearInterval(ctrl.item_selector.__posMobileBadgeInterval); } catch (e) { } ctrl.item_selector.__posMobileBadgeInterval = null; if (CONFIG.DEBUG) console.debug('[POS Mobile] cleared item_selector.__posMobileBadgeInterval'); }
+					}
+				} catch (e) { }
+			} catch (e) { }
+		}, 'posMobileCleanup');
+	}
+
+	// Register unload/pagehide/visibility handlers for cleanup to avoid timers leaking
+	try {
+		window.addEventListener('pagehide', posMobileCleanup, { passive: true });
+		window.addEventListener('beforeunload', posMobileCleanup, { passive: true });
+		document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') posMobileCleanup(); }, { passive: true });
+		// Expose cleanup for manual invocation in console/tests
+		window.POSMobile.cleanup = posMobileCleanup;
+	} catch (e) { }
+
+	// Offline order queue API
+	const OrderQueue = {
+		enqueue(doc) {
+			const offlineId = (doc && (doc.__sale_id || doc.__pos_sale_id)) || null;
+			return this.list()
+				.then((list) => {
+					const exists = offlineId && Array.isArray(list)
+						? list.some((o) => o && o.doc && ((o.doc.__sale_id || o.doc.__pos_sale_id) === offlineId))
+						: false;
+					if (exists) return true;
+					const payload = { doc, created_at: Date.now(), status: 'queued' };
+					return IDB.put('orders', payload);
+				})
+				.then(() => this.updateIndicator())
+				.catch(() => { });
+		},
+		list() {
+			return IDB.open().then(db => new Promise((resolve) => {
+				const tx = db.transaction('orders', 'readonly');
+				const req = tx.objectStore('orders').getAll();
+				req.onsuccess = () => resolve(req.result || []);
+			}));
+		},
+		remove(id) {
+			return IDB.open().then(db => new Promise((resolve) => {
+				const tx = db.transaction('orders', 'readwrite');
+				tx.objectStore('orders').delete(id);
+				tx.oncomplete = () => resolve(true);
+			}));
+		},
+		flushInProgress: false,
+		flushBackoffMs: 0,
+		flush() {
+			if (this.flushInProgress || !navigator.onLine) return Promise.resolve();
+			this.flushInProgress = true;
+			return this.list().then((orders) => {
+				if (!orders.length) { this.flushInProgress = false; this.flushBackoffMs = 0; this.updateIndicator(); return; }
+				const order = orders[0];
+				const args = {};
+				if (order && order.doc && order.doc.name && !/^New\s/.test(String(order.doc.name))) args.name = order.doc.name;
+				const sid = order && order.doc && (order.doc.__sale_id || order.doc.__pos_sale_id);
+				if (sid) args.sale_id = sid;
+				if (order && order.doc && order.doc.doctype) args.doctype = order.doc.doctype;
+				return frappe
+					.call({ method: CONFIG.SYNC.REMOTE_UPDATE_METHOD || 'pos_mobile.pos_mobile.api.pos_sync.mark_paid', args })
+					.then((r) => {
+						if (r && r.message && r.message.ok) {
+							return this.remove(order.id).then(() => { this.flushBackoffMs = 0; this.updateIndicator(); });
+						}
+						throw new Error('Sync update failed');
+					})
+					.catch(() => { this.flushBackoffMs = Math.min((this.flushBackoffMs || CONFIG.QUEUE.BACKOFF_BASE_MS) * 2, CONFIG.QUEUE.BACKOFF_MAX_MS); })
+					.finally(() => { this.flushInProgress = false; setTimeout(() => this.flush(), this.flushBackoffMs || CONFIG.QUEUE.FLUSH_INTERVAL_MS); });
+			});
+		},
+		updateIndicator() {
+			Promise.all([
+				this.list().catch(() => []),
+				(window.POSPouch && typeof window.POSPouch.countLocalSales === 'function' ? window.POSPouch.countLocalSales() : Promise.resolve(0))
+			]).then(([orders, localSales]) => {
+				const badge = document.getElementById('pos-offline-badge');
+				if (!badge) return;
+				if (navigator.onLine) {
+					badge.style.display = 'none';
+					return;
+				}
+				const count = (Array.isArray(orders) ? orders.length : 0) + (Number(localSales) || 0);
+				const base = frappe && frappe._ ? frappe._('Offline') : 'Offline';
+				badge.textContent = count > 0 ? `${base} • ${count}` : base;
+				badge.style.display = 'inline-flex';
+			}).catch(() => { });
+		}
+	};
+
+	// Register service worker for offline support
+	(function registerPOSServiceWorker() {
+		try {
+			if ('serviceWorker' in navigator) {
+				navigator.serviceWorker.register('/assets/pos_mobile/sw_pos.js').catch(() => {
+					// try app path fallback
+					navigator.serviceWorker.register('/sw_pos.js').catch(() => { });
+				});
+				// start periodic queue flush and react to online
+				const queueFlushInterval = setInterval(() => { OrderQueue.flush(); }, CONFIG.QUEUE.FLUSH_INTERVAL_MS);
+				window.POSMobile.queueFlushInterval = queueFlushInterval;
+				GLOBAL_INTERVALS.push(queueFlushInterval);
+				window.addEventListener('online', () => OrderQueue.flush(), { passive: true });
+				window.addEventListener('offline', () => OrderQueue.updateIndicator(), { passive: true });
+			}
+		} catch (e) { }
+	})();
+
+	// Client push worker: submit local PouchDB sales to ERP endpoint when online
+	(function startClientPushWorker() {
+		let pushing = false;
+		async function tick() {
+			if (pushing) return;
+			if (!navigator.onLine) return;
+			if (!window.POSPouch || !CONFIG.SYNC.REMOTE_UPDATE_METHOD) return;
+			const batch = await window.POSPouch.listLocalSales(3);
+			if (!batch.length) return;
+			pushing = true;
+			try {
+				for (const sale of batch) {
+					try {
+						const args = {};
+						if (sale.doc && sale.doc.name && !/^New\s/.test(String(sale.doc.name))) args.name = sale.doc.name;
+						if (sale._id) args.sale_id = sale._id;
+						if (sale.doc && sale.doc.doctype) args.doctype = sale.doc.doctype;
+						const res = await frappe.call({ method: CONFIG.SYNC.REMOTE_UPDATE_METHOD, args });
+						if (res && res.message && res.message.ok) {
+							await window.POSPouch.markSynced(sale._id);
+						} else {
+							break; // stop to avoid hammering when server can't map order
+						}
+					} catch (e) {
+						break; // stop on first failure to avoid hammering
+					}
+				}
+			} finally {
+				pushing = false;
+			}
+		}
+		const clientPushInterval = setInterval(() => { if (document.hidden) return; tick(); }, 7000);
+		window.POSMobile.clientPushInterval = clientPushInterval;
+		GLOBAL_INTERVALS.push(clientPushInterval);
+		window.addEventListener('online', () => tick(), { passive: true });
+	})();
+
+	// Load PouchDB and initialize local DB for robust offline
+	(function initPouchDB() {
+		function makeUUID() {
+			return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+				const r = (Math.random() * 16) | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+				return v.toString(16);
+			});
+		}
+
+		function afterLoaded() {
+			try {
+				if (!window.PouchDB) return;
+				if (!window.POSDB) {
+					window.POSDB = new window.PouchDB('pos_local');
+				}
+				// start replication if remote configured
+				if (CONFIG.SYNC.REMOTE_DB_URL) {
+					try {
+						const sync = window.POSDB.sync(CONFIG.SYNC.REMOTE_DB_URL, { live: true, retry: true });
+						sync.on('change', () => { try { OrderQueue.updateIndicator(); } catch (e) { } });
+						sync.on('paused', () => { try { OrderQueue.updateIndicator(); } catch (e) { } });
+						sync.on('active', () => { try { OrderQueue.updateIndicator(); } catch (e) { } });
+					} catch (e) { }
+				}
+				// expose helpers
+				window.POSPouch = {
+					makeUUID,
+					async writeSaleDoc(doc) {
+						if (!window.POSDB) return;
+						const terminal_id = (frappe && frappe.boot && frappe.boot.session && frappe.boot.session.user) || 'terminal';
+						const provided = doc && (doc.__sale_id || doc.__pos_sale_id);
+						const _id = (typeof provided === 'string' && provided.indexOf('sale:') === 0) ? provided : `sale:${makeUUID()}`;
+						// idempotent: skip if already present
+						try { const existing = await window.POSDB.get(_id); if (existing) { try { OrderQueue.updateIndicator(); } catch (e) { } return _id; } } catch (e) { }
+						const payload = { _id, type: 'sale', created_at: Date.now(), terminal_id, status: 'local', doc };
+						try { await window.POSDB.put(payload); } catch (e) { }
+						try { OrderQueue.updateIndicator(); } catch (e) { }
+						return _id;
+					},
+					async countLocalSales() {
+						if (!window.POSDB) return 0;
+						try {
+							const res = await window.POSDB.allDocs({ include_docs: true, startkey: 'sale:', endkey: 'sale:\ufff0' });
+							return (res.rows || []).filter(r => r.doc && r.doc.status === 'local').length;
+						} catch (e) { return 0; }
+					},
+					async listLocalSales(limit = 5) {
+						if (!window.POSDB) return [];
+						try {
+							const res = await window.POSDB.allDocs({ include_docs: true, startkey: 'sale:', endkey: 'sale:\ufff0' });
+							return (res.rows || []).map(r => r.doc).filter(d => d && d.status === 'local').sort((a, b) => (a.created_at || 0) - (b.created_at || 0)).slice(0, limit);
+						} catch (e) { return []; }
+					},
+					async markSynced(id) {
+						if (!window.POSDB) return;
+						try {
+							const doc = await window.POSDB.get(id);
+							doc.status = 'synced';
+							doc.synced_at = Date.now();
+							await window.POSDB.put(doc);
+							try { OrderQueue.updateIndicator(); } catch (e) { }
+						} catch (e) { }
+					}
+				};
+			} catch (e) { }
+		}
+
+		if (window.PouchDB) { afterLoaded(); return; }
+		try {
+			const s = document.createElement('script');
+			s.src = 'https://cdn.jsdelivr.net/npm/pouchdb@7.3.1/dist/pouchdb.min.js';
+			s.async = true;
+			s.onload = afterLoaded;
+			document.head.appendChild(s);
+		} catch (e) { }
+	})();
+
 	console.log('[POS Mobile] Initialization complete! Available as window.POSMobile');
 
 })(); 

@@ -43,7 +43,9 @@ app_license = "mit"
 page_js = {
     "point-of-sale": "public/js/pos_overrides.js",
 }
-
+override_whitelisted_methods = {
+    "pos_mobile.api.pos_sync.submit_sale": "pos_mobile.pos_mobile.api.pos_sync.submit_sale",
+}
 # include js in doctype views
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
@@ -201,7 +203,7 @@ page_js = {
 
 # Request Events
 # ----------------
-# before_request = ["pos_mobile.utils.before_request"]
+before_request = ["pos_mobile.pos_mobile.api.item_details_override.ensure_patched"]
 # after_request = ["pos_mobile.utils.after_request"]
 
 # Job Events
