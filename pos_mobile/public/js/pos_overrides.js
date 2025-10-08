@@ -983,20 +983,6 @@
 								}
 								tile.__posRefs.countBtn = countBtn;
 							}
-
-							// Stock container caching
-							let stockContainer = tile.__posRefs.stockContainer;
-							if (!stockContainer) {
-								stockContainer = tile.querySelector('.stock-container');
-								if (!stockContainer) {
-									stockContainer = document.createElement('div');
-									stockContainer.className = 'stock-container';
-									stockContainer.style.cssText = `position:absolute;bottom:6px;right:6px;display:flex;align-items:center;gap:6px;z-index:5;`;
-									tile.appendChild(stockContainer);
-								}
-								tile.__posRefs.stockContainer = stockContainer;
-							}
-
 							// update count button display
 							if (qty > 0) {
 								tile.__posRefs.countBtn.textContent = String(qty);
@@ -1008,15 +994,6 @@
 								tile.__posRefs.countBtn.setAttribute('aria-hidden', 'true');
 							}
 
-							// Render stock-value inside cached stock container
-							let label = tile.__posRefs.stockContainer.querySelector('.stock-value');
-							if (!label) {
-								label = document.createElement('div');
-								label.className = 'stock-value';
-								label.style.cssText = `min-width:28px;text-align:center;font-size:14px;color:#fff;background:rgba(0,0,0,0.5);border-radius:6px;padding:2px 6px;`;
-								tile.__posRefs.stockContainer.appendChild(label);
-							}
-							label.textContent = (typeof qty === 'number') ? qty : (qty || '+');
 						});
 
 						const btn = document.querySelector('.items-selector .selected-items-btn');
