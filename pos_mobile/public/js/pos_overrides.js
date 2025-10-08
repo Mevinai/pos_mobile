@@ -183,6 +183,26 @@
 		} catch (e) { return null; }
 	}
 
+	// Register site-scoped service worker for offline navigation (idempotent)
+	(function registerSiteSW() {
+		if (!('serviceWorker' in navigator)) return;
+		// Already registered by another script?
+		if (navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL && navigator.serviceWorker.controller.scriptURL.endsWith('/sw.js')) {
+			if (CONFIG.DEBUG) console.log('[POS Mobile] Site SW already controlling this page');
+			return;
+		}
+		try {
+			navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(reg => {
+				if (CONFIG.DEBUG) console.log('[POS Mobile] Registered site service worker', reg);
+			}).catch(err => {
+				console.warn('[POS Mobile] Failed to register site SW:', err);
+			});
+		} catch (e) {
+			// older browsers or CSP restrictions
+			if (CONFIG.DEBUG) console.warn('[POS Mobile] SW registration skipped:', e);
+		}
+	})();
+
 	// Wait for POS to be ready with improved retry logic
 	function onPOSReady(cb) {
 		const check = setInterval(() => {
