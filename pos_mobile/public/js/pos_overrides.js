@@ -236,12 +236,6 @@
 			.point-of-sale-app .btn-primary:hover { filter: brightness(0.96); transform: translateY(-1px); }
 			.point-of-sale-app .btn-primary:active { transform: translateY(0); }
 
-			/* Cards polish */
-			.items-selector .item-wrapper { background: var(--fg-color); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden; transition: box-shadow .2s ease, transform .2s ease; }
-			.items-selector .item-wrapper:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-1px); }
-			.payment-container .mode-of-payment { transition: box-shadow .2s ease, transform .2s ease; }
-			.payment-container .mode-of-payment:hover { transform: translateY(-1px); }
-
 			/* Focus visible */
 			.point-of-sale-app :focus-visible { outline: 2px solid var(--blue-500, #3b82f6); outline-offset: 2px; border-radius: 6px; }
 
