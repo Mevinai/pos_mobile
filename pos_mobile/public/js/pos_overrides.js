@@ -51,7 +51,8 @@
 			BATCH_SIZE: 30
 		},
 		QUEUE: {
-			FLUSH_INTERVAL_MS: 15000,
+			FLUSH_INTERVAL_MS: 5000,
+			BATCH_SIZE: 10,
 			BACKOFF_BASE_MS: 3000,
 			BACKOFF_MAX_MS: 60000
 		},
@@ -1215,18 +1216,34 @@
 						return;
 					}
 
-					// Online: submit current doc (do not create a new one)
-					frm.save('Submit', () => {
-						try { frappe.utils.play_sound('submit'); showPaidSummary(frm.doc); } catch (err) { }
-						finalize();
-					});
-					return;
-
-					// Fallback: core submit
+					// Online: try to submit current doc; if submission fails (network/server error)
+					// fall back to offline queue so POS continues to work without internet.
 					frm.save('Submit', (r) => {
-						if (!r || r.exc) { finalize(); return; }
-						frappe.utils.play_sound('submit');
-						try { showPaidSummary(frm.doc); } catch (err) { }
+						if (!r || r.exc) {
+							// submission failed: fallback to offline queue
+							try {
+								const viewDoc = ensurePaidViewDoc(doc);
+								const afterQueue = () => {
+									frappe.show_alert({ message: frappe._('Order saved offline. Will sync when online.'), indicator: 'blue' });
+									frappe.utils.play_sound('submit');
+									showPaidSummary(viewDoc);
+									finalize();
+								};
+								if (window.POSPouch && typeof window.POSPouch.writeSaleDoc === 'function') {
+									window.POSPouch.writeSaleDoc(Object.assign({}, doc, { __sale_id: sale_id })).then(afterQueue).catch(() => { OrderQueue.enqueue(Object.assign({}, doc, { __sale_id: sale_id })).then(afterQueue); });
+								} else {
+									OrderQueue.enqueue(Object.assign({}, doc, { __sale_id: sale_id })).then(afterQueue);
+								}
+								return;
+							} catch (err) {
+								// if fallback also fails, just finalize and surface error
+								console.error('[POS Mobile] submit fallback failed', err);
+								finalize();
+								return;
+							}
+						}
+						// success path
+						try { frappe.utils.play_sound('submit'); showPaidSummary(frm.doc); } catch (err) { }
 						finalize();
 					});
 				}, true);
@@ -1317,24 +1334,37 @@
 		flush() {
 			if (this.flushInProgress || !navigator.onLine) return Promise.resolve();
 			this.flushInProgress = true;
-			return this.list().then((orders) => {
+			return this.list().then(async (orders) => {
 				if (!orders.length) { this.flushInProgress = false; this.flushBackoffMs = 0; this.updateIndicator(); return; }
-				const order = orders[0];
-				const args = {};
-				if (order && order.doc && order.doc.name && !/^New\s/.test(String(order.doc.name))) args.name = order.doc.name;
-				const sid = order && order.doc && (order.doc.__sale_id || order.doc.__pos_sale_id);
-				if (sid) args.sale_id = sid;
-				if (order && order.doc && order.doc.doctype) args.doctype = order.doc.doctype;
-				return frappe
-					.call({ method: CONFIG.SYNC.REMOTE_UPDATE_METHOD || 'pos_mobile.pos_mobile.api.pos_sync.mark_paid', args })
-					.then((r) => {
+				// Process a small batch to improve throughput while avoiding hammering the server
+				const batchSize = (CONFIG.QUEUE && CONFIG.QUEUE.BATCH_SIZE) || 3;
+				const toProcess = orders.slice(0, batchSize);
+				for (const order of toProcess) {
+					const args = {};
+					if (order && order.doc && order.doc.name && !/^New\s/.test(String(order.doc.name))) args.name = order.doc.name;
+					const sid = order && order.doc && (order.doc.__sale_id || order.doc.__pos_sale_id);
+					if (sid) args.sale_id = sid;
+					if (order && order.doc && order.doc.doctype) args.doctype = order.doc.doctype;
+					try {
+						const r = await frappe.call({ method: CONFIG.SYNC.REMOTE_UPDATE_METHOD || 'pos_mobile.pos_mobile.api.pos_sync.mark_paid', args });
 						if (r && r.message && r.message.ok) {
-							return this.remove(order.id).then(() => { this.flushBackoffMs = 0; this.updateIndicator(); });
+							await this.remove(order.id);
+							this.flushBackoffMs = 0;
+							this.updateIndicator();
+							continue; // next order
 						}
-						throw new Error('Sync update failed');
-					})
-					.catch(() => { this.flushBackoffMs = Math.min((this.flushBackoffMs || CONFIG.QUEUE.BACKOFF_BASE_MS) * 2, CONFIG.QUEUE.BACKOFF_MAX_MS); })
-					.finally(() => { this.flushInProgress = false; setTimeout(() => this.flush(), this.flushBackoffMs || CONFIG.QUEUE.FLUSH_INTERVAL_MS); });
+						// if server didn't return ok, break to avoid repeating failing payloads
+						this.flushBackoffMs = Math.min((this.flushBackoffMs || CONFIG.QUEUE.BACKOFF_BASE_MS) * 2, CONFIG.QUEUE.BACKOFF_MAX_MS);
+						break;
+					} catch (err) {
+						// on error, exponential backoff and stop processing further
+						this.flushBackoffMs = Math.min((this.flushBackoffMs || CONFIG.QUEUE.BACKOFF_BASE_MS) * 2, CONFIG.QUEUE.BACKOFF_MAX_MS);
+						break;
+					}
+				}
+				this.flushInProgress = false;
+				// schedule next flush (respect backoff when errors occurred)
+				setTimeout(() => this.flush(), this.flushBackoffMs || CONFIG.QUEUE.FLUSH_INTERVAL_MS);
 			});
 		},
 		updateIndicator() {
@@ -1381,7 +1411,8 @@
 			if (pushing) return;
 			if (!navigator.onLine) return;
 			if (!window.POSPouch || !CONFIG.SYNC.REMOTE_UPDATE_METHOD) return;
-			const batch = await window.POSPouch.listLocalSales(3);
+			const batchSize = (CONFIG.QUEUE && CONFIG.QUEUE.BATCH_SIZE) || 3;
+			const batch = await window.POSPouch.listLocalSales(batchSize);
 			if (!batch.length) return;
 			pushing = true;
 			try {
@@ -1405,7 +1436,7 @@
 				pushing = false;
 			}
 		}
-		const clientPushInterval = setInterval(() => { if (document.hidden) return; tick(); }, 7000);
+		const clientPushInterval = setInterval(() => { if (document.hidden) return; tick(); }, 5000);
 		window.POSMobile.clientPushInterval = clientPushInterval;
 		GLOBAL_INTERVALS.push(clientPushInterval);
 		window.addEventListener('online', () => tick(), { passive: true });
